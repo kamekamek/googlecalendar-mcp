@@ -4,7 +4,7 @@
 
 1. Install the Rust nightly toolchain (`rustup toolchain install nightly`) — required because `rmcp` targets the upcoming 2024 edition. A `rust-toolchain.toml` file is provided, so running `cargo` inside this repository automatically selects nightly.
 2. Create a Google Cloud OAuth client (web application type) with the redirect URI `http://localhost:8080/oauth/callback`.
-3. Copy `config/.env.example` to `.env` and populate `APP__OAUTH__CLIENT_ID` and `APP__OAUTH__CLIENT_SECRET`. Set `APP__SECURITY__USE_IN_MEMORY=true` if you prefer not to persist tokens to disk.
+3. Copy `.env.example` (at the repository root) to `.env` and populate `APP__OAUTH__CLIENT_ID` and `APP__OAUTH__CLIENT_SECRET`. Set `APP__SECURITY__USE_IN_MEMORY=true` if you prefer not to persist tokens to disk.
 4. Optionally adjust `config/config.toml` for custom bind addresses, default calendar IDs, or storage mode.
 
 ## Running the Server

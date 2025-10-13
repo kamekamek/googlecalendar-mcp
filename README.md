@@ -19,7 +19,7 @@
 
 ## 2. 環境変数・設定ファイル
 
-1. `config/.env.example` をコピーして `.env` を作成し、以下を設定します。
+1. ルートの `.env.example` をコピーして `.env` を作成し、以下を設定します。
 
    ```env
    APP__OAUTH__CLIENT_ID="<Google OAuth client ID>"
