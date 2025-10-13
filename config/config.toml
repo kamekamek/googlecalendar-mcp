@@ -1,0 +1,29 @@
+[server]
+# Bind address for the MCP bridge HTTP server
+bind_address = "127.0.0.1:8080"
+# Public URL exposed to Google OAuth. Must match the authorized redirect URI.
+public_url = "http://localhost:8080"
+
+[oauth]
+# Replace with the Google Cloud console OAuth client credentials.
+client_id = "GOOGLE_OAUTH_CLIENT_ID"
+client_secret = "GOOGLE_OAUTH_CLIENT_SECRET"
+auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
+token_url = "https://oauth2.googleapis.com/token"
+redirect_uri = "http://localhost:8080/oauth/callback"
+# Scope list can be extended if additional permissions are required.
+scopes = ["https://www.googleapis.com/auth/calendar"]
+
+[google]
+# Default Google Calendar API base URL. Override only for testing against a mock server.
+api_base = "https://www.googleapis.com/calendar/v3"
+# Optional default calendar id. When omitted, the authenticated user's primary calendar is used.
+# calendar_id = "primary"
+
+[security]
+# Tokens are persisted to this path. Ensure the path is secured via filesystem permissions.
+token_store_path = "config/tokens.json"
+# When set to true, configure an encryption layer for tokens. (Not yet implemented)
+encrypt_tokens = false
+# When true, tokens are kept in memory only (token_store_path is ignored).
+use_in_memory = false
