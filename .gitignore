@@ -1,3 +1,7 @@
 /target
 /.env
 config/tokens.json
+# 除外したい .env系ファイル
+.env*
+!/.env.example
+
