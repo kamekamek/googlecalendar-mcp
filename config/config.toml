@@ -31,6 +31,6 @@ use_in_memory = false
 
 [proxy]
 # Enable OAuth 2.1 + Dynamic Client Registration proxy for Claude Code and similar clients.
-enabled = false
+enabled = true
 # OAuth callback path for the proxy. Defaults to "/proxy/oauth/callback".
 # redirect_path = "/proxy/oauth/callback"

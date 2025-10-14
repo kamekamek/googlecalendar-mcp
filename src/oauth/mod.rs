@@ -77,7 +77,8 @@ impl OAuthClient {
 
         let mut request = client
             .authorize_url(CsrfToken::new_random)
-            .set_pkce_challenge(pkce_challenge);
+            .set_pkce_challenge(pkce_challenge)
+            .add_extra_param("prompt", "select_account");
 
         for scope in &self.scopes {
             request = request.add_scope(scope.clone());

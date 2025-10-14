@@ -18,7 +18,7 @@ cargo +nightly run
 
 ## ユーザー認証の手順
 
-1. エージェントから `GET /oauth/authorize?user_id=<ユーザーID>` を呼び出す。
+1. エージェントから `GET /oauth/authorize?user_id=<ユーザーID>` を呼び出す（サーバー側で `prompt=select_account` を付与しているため、毎回 Google 側でアカウント選択ダイアログが表示されます）。
 2. レスポンスに含まれる `authorize_url` をブラウザで開いて Google にログイン。
 3. 同意後、Google が `/oauth/callback` にリダイレクトし、指定した `user_id` のトークンを保存します。
 
@@ -26,7 +26,7 @@ cargo +nightly run
 
 ### 認証情報をクリアする
 
-別アカウントで再認証したい場合は、保存済みトークンを削除してから再度 OAuth フローを実行してください。
+別アカウントで再認証したい場合は、保存済みトークンを削除してから再度 OAuth フローを実行してください。トークンを削除すると、再びアカウント選択画面からログインし直せます。
 
 ```bash
 curl -X DELETE https://<サーバードメイン>/oauth/token/<user_id>
@@ -55,9 +55,10 @@ Claude Code などからインターネット越しに接続させるには、HT
 
 推奨構成（Cloud Run）の詳細な手順や運用チェックリストは `docs/design.md` の「Remote MCP 公開戦略」を参照してください。
 
-### Claude Code を利用する場合
+### Claude Code / Codex を利用する場合
 
-- Claude Code CLI は OAuth 2.1 + DCR を必須としているため、上記のいずれかの方法で HTTPS + DCR を備えた公開エンドポイントを用意する。
+- Claude Code CLI/Codex CLI の両方が OAuth 2.1 + Dynamic Client Registration (DCR) を必須としているため、`config/config.toml` で `proxy.enabled = true`（または `.env` で `APP__PROXY__ENABLED=true`）を有効化し、Google 側のリダイレクト URI に `/proxy/oauth/callback` を追加してください。
+- DCR レジストレーションは JSON で完了し、Codex の `codex mcp login google_calendar` でもエラーなくクライアント登録が通るようになっています。
 - `.mcp.json` 等で公開 URL (`https://<your-domain>/mcp`) を指定し、初回接続時に Authorization ヘッダー経由でトークンが保存されているかをサーバーログ (`stored bearer token from headers`) で確認する。
 - プロキシを用意できない場合は、STDIO 型 MCP サーバーや Claude Desktop のカスタムコネクタを利用してローカルで完結させる。 
 

@@ -204,34 +204,73 @@ pub struct ListEventsResponse {
     pub next_page_token: Option<String>,
 }
 
+/// Event payload for creating or updating calendar events.
+///
+/// All fields are optional for updates; `summary`, `start`, and `end` are required for creation.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct EventPayload {
+    /// Calendar ID (defaults to "primary" if not specified)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub calendar_id: Option<String>,
+
+    /// Event title/summary (required for creation)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
+
+    /// Event description (supports HTML)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
+    /// Event location (can be physical address or online meeting URL)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+
+    /// Start date-time in RFC3339 format (e.g., "2025-10-15T18:30:00+09:00")
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(description = "Start date-time as RFC3339 string (e.g., \"2025-10-15T18:30:00+09:00\")")]
     pub start: Option<EventDateTime>,
+
+    /// End date-time in RFC3339 format (e.g., "2025-10-15T20:30:00+09:00")
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(description = "End date-time as RFC3339 string (e.g., \"2025-10-15T20:30:00+09:00\")")]
     pub end: Option<EventDateTime>,
+
+    /// List of event attendees
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attendees: Option<Vec<EventAttendee>>,
+
+    /// Reminder configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reminders: Option<EventReminders>,
+
+    /// Conference data (e.g., Google Meet details)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conference_data: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Default, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct EventDateTime {
     #[serde(rename = "dateTime", skip_serializing_if = "Option::is_none")]
     pub date_time: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time_zone: Option<String>,
+}
+
+impl JsonSchema for EventDateTime {
+    fn schema_name() -> String {
+        "EventDateTime".to_string()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        // MCP clients should pass RFC3339 strings like "2025-10-15T18:30:00+09:00"
+        // The deserializer will accept both strings and objects, but we advertise
+        // strings in the schema for simplicity.
+        let mut schema = String::json_schema(gen).into_object();
+        schema.metadata().description = Some(
+            "RFC3339 date-time string (e.g., \"2025-10-15T18:30:00+09:00\")".to_string(),
+        );
+        schema.into()
+    }
 }
 
 impl<'de> Deserialize<'de> for EventDateTime {
