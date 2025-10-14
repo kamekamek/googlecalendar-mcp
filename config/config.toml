@@ -26,4 +26,4 @@ token_store_path = "config/tokens.json"
 # When set to true, configure an encryption layer for tokens. (Not yet implemented)
 encrypt_tokens = false
 # When true, tokens are kept in memory only (token_store_path is ignored).
-use_in_memory = true
+use_in_memory = false

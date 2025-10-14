@@ -21,7 +21,12 @@ impl GoogleCalendarClient {
             .build()
             .expect("reqwest client");
 
-        let api_base = Url::parse(&api_base).expect("valid api base url");
+        let mut normalized = api_base.trim().to_owned();
+        if !normalized.ends_with('/') {
+            normalized.push('/');
+        }
+
+        let api_base = Url::parse(&normalized).expect("valid api base url");
 
         Self {
             http,
