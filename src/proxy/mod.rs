@@ -220,7 +220,8 @@ impl ProxyState {
             .append_pair("client_id", &self.google_client_id)
             .append_pair("redirect_uri", &self.redirect_uri)
             .append_pair("scope", &self.merge_scopes(params))
-            .append_pair("state", &proxy_state);
+            .append_pair("state", &proxy_state)
+            .append_pair("prompt", "select_account");
 
         if let Some(challenge) = &params.code_challenge {
             google_url
