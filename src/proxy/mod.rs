@@ -111,7 +111,7 @@ impl ProxyState {
             response_types_supported: vec!["code"],
             grant_types_supported: vec!["authorization_code"],
             code_challenge_methods_supported: vec!["S256"],
-            scopes_supported: vec!["https://www.googleapis.com/auth/calendar".to_string()],
+            scopes_supported: vec!["https://www.googleapis.com/auth/calendar.events".to_string()],
             token_endpoint_auth_methods_supported: vec!["client_secret_post"],
             subject_types_supported: vec!["public"],
             id_token_signing_alg_values_supported: vec!["RS256"],
@@ -122,7 +122,7 @@ impl ProxyState {
         ProtectedResourceMetadata {
             resource,
             authorization_servers: vec![self.public_url.clone()],
-            scopes_supported: vec!["https://www.googleapis.com/auth/calendar".to_string()],
+            scopes_supported: vec!["https://www.googleapis.com/auth/calendar.events".to_string()],
         }
     }
 
@@ -135,7 +135,7 @@ impl ProxyState {
             response_types_supported: vec!["code"],
             grant_types_supported: vec!["authorization_code"],
             code_challenge_methods_supported: vec!["S256"],
-            scopes_supported: vec!["https://www.googleapis.com/auth/calendar".to_string()],
+            scopes_supported: vec!["https://www.googleapis.com/auth/calendar.events".to_string()],
             token_endpoint_auth_methods_supported: vec!["client_secret_post"],
             subject_types_supported: vec!["public"],
             id_token_signing_alg_values_supported: vec!["RS256"],
@@ -163,7 +163,7 @@ impl ProxyState {
             redirect_uris: request.redirect_uris.clone(),
             scope: request
                 .scope
-                .unwrap_or_else(|| "https://www.googleapis.com/auth/calendar".to_string()),
+                .unwrap_or_else(|| "https://www.googleapis.com/auth/calendar.events".to_string()),
         };
 
         self.clients.write().insert(client_id.clone(), record);
@@ -241,7 +241,7 @@ impl ProxyState {
         if let Some(scope) = &params.scope {
             scope.clone()
         } else {
-            "https://www.googleapis.com/auth/calendar".to_string()
+            "https://www.googleapis.com/auth/calendar.events".to_string()
         }
     }
 

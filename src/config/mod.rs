@@ -70,7 +70,7 @@ impl OAuthConfig {
     }
 
     fn default_scopes() -> Vec<String> {
-        vec!["https://www.googleapis.com/auth/calendar".to_owned()]
+        vec!["https://www.googleapis.com/auth/calendar.events".to_owned()]
     }
 }
 

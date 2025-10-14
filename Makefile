@@ -25,7 +25,7 @@ run:
 	$(CARGO) $(NIGHTLY) run --bin $(LOCAL_BIN)
 
 run-shuttle:
-	$(CARGO) $(NIGHTLY) run --bin $(SHUTTLE_BIN) --features="shuttle"
+	$(SHUTTLE) run --secrets Secrets.dev.toml
 
 build:
 	$(CARGO) $(NIGHTLY) build

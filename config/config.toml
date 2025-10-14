@@ -13,7 +13,7 @@ auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://oauth2.googleapis.com/token"
 redirect_uri = "http://localhost:8080/oauth/callback"
 # Scope list can be extended if additional permissions are required.
-scopes = ["https://www.googleapis.com/auth/calendar"]
+scopes = ["https://www.googleapis.com/auth/calendar.events"]
 
 [google]
 # Default Google Calendar API base URL. Override only for testing against a mock server.
