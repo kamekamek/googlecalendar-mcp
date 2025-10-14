@@ -72,10 +72,12 @@ Claude Code など外部クライアントへサーバーを公開する際の�
 
 | 選択肢 | 推奨度 | 概要 | メリット | 注意点 |
 |---|---|---|---|---|
-| **A. HTTPS + 自前 DCR プロキシ (現行構成)** | ◎ | Axum サーバーはローカルポートで待ち受け、Caddy/Nginx 等のプロキシで HTTPS 終端と Dynamic Client Registration を提供する。Claude などは `https://mcp.example.com/mcp` に接続。 | ・Claude の OAuth 2.1 + DCR 要件を満たせる<br>・Google OAuth の既存クライアント ID/Secret を流用できる<br>・SSE と HTTP シムを統一的に管理できる | ・プロキシの構築・証明書更新が必要<br>・Authorization ヘッダー経由のトークン取り込みが必須 (v2025-10-14 時点では `token_ingest` で対応) |
-| **B. Claude Desktop カスタムコネクタ** | ○ | Claude Desktop 上の Custom Connector で `client_id`/`client_secret` を直接指定し、HTTPS で本サーバー (または簡易プロキシ) に接続。 | ・DCR 実装不要<br>・ローカル環境で閉じた利用が容易 | ・利用者ごとに設定が必要<br>・資格情報の配布を慎重に扱う必要がある |
-| **C. STDIO MCP サーバー (ローカル連携)** | △ | `rmcp::transport::stdio_server` を利用し、エージェントと同一マシン内で標準入出力通信を行う。 | ・ネットワーク公開が不要<br>・OAuth をサーバープロセス内で完結できる | ・対応クライアントが限られる (Claude Code は Remote MCP 推奨)<br>・各端末でプロセス常駐が必要 |
-| **D. マネージド OAuth ブリッジ (Apigee / API Gateway 等)** | △ | Google Cloud API Gateway、Apigee、Envoy などで OAuth ブリッジを構築し、MCP サーバーを保護する。 | ・TLS やスケーリングをクラウド側に委任できる<br>・監査・レート制御などの機能を活用できる | ・DCR 機能の有無を事前検証する必要がある<br>・設定が複雑になりがちで、カスタムコードを伴う場合がある |
+| **A. Google Cloud Run + Cloud Load Balancing** | ◎ | Axum サーバーをコンテナ化して Cloud Run にデプロイし、Managed TLS とカスタムドメインで公開する。DCR エンドポイントはサーバー内の `/proxy/oauth/...` をそのまま利用。 | ・完全マネージド / 自動スケール<br>・証明書が自動更新<br>・Google OAuth 設定との親和性が高い | 初回は `gcloud run deploy` 等のセットアップが必要。`server.public_url` と OAuth リダイレクト URI を公開ドメインに合わせる。永続ストレージが必要な場合は Cloud Storage / Firestore 等を検討。 |
+| **B. Shuttle.dev** | ○ | Rust 向けのホスティングに `cargo shuttle deploy` でデプロイ。Axum + SSE に対応し、カスタムドメインや Postgres 連携も提供。 | ・Rust 開発者向けで設定が簡単<br>・無料枠あり<br>・GitHub Actions 連携が容易 | HTTPS 終端と DCR レイヤーはアプリ側で提供する必要がある。カスタムドメインは有料プラン要確認。ファイル永続化は Shuttle の Secrets/Storage 機能を利用。 |
+| **C. VPS / 独自サーバー + Caddy** | ○ | DigitalOcean / Linode / EC2 などの VM に直接デプロイし、Caddy で HTTPS + DCR プロキシを構成。 | ・完全にカスタマイズ可能<br>・既存の Caddyfile を流用できる | OS メンテナンス・証明書更新・systemd 管理が必要。`config/tokens.json` を安全に保護する仕組みを整える。 |
+| **D. Azure Container Apps** | △ | Azure のマネージドコンテナ基盤にデプロイし、Front Door/Ingress で HTTPS 公開。 | ・オートスケールと監視が充実<br>・Azure AD 等との統合が容易 | DCR エンドポイントを組み込む必要がある。料金・構成がやや複雑。 |
+| **E. Cloudflare Workers / Tunnel + 任意の Compute** | △ | Axum サーバーを別の Compute（VPS や Cloud Run 等）に置き、Cloudflare Tunnel や Workers で HTTPS + DCR を提供。 | ・グローバルエッジ / WAF / Access が利用可 | Tunnel 常駐プロセスやカスタムハンドラが必要。Workers で全処理を完結させる場合は Rust コードの書き換えが必要。 |
+| **F. STDIO MCP サーバー (ローカル連携)** | △ | `rmcp::transport::stdio_server` を利用し、エージェントと同一マシン内で標準入出力通信を行う。 | ・ネットワーク公開が不要<br>・OAuth をサーバープロセス内で完結できる | 対応クライアントが限られる (Claude Code は Remote MCP 推奨)。各端末でプロセス常駐が必要。 |
 
 ### 推奨デプロイ手順 (A案)
 1. Axum サーバーは内部ポート (例: `127.0.0.1:8080`) で起動し、`server.public_url` を公開ドメイン (`https://mcp.example.com`) に合わせる。

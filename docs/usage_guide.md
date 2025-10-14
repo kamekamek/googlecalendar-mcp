@@ -24,6 +24,17 @@ cargo +nightly run
 
 トークンは既定で `config/tokens.json` に保存されます。権限や暗号化などは環境に合わせて管理してください。
 
+### 認証情報をクリアする
+
+別アカウントで再認証したい場合は、保存済みトークンを削除してから再度 OAuth フローを実行してください。
+
+```bash
+curl -X DELETE https://<サーバードメイン>/oauth/token/<user_id>
+# 204 No Content が返れば削除成功
+```
+
+削除後に `GET /oauth/authorize?user_id=<user_id>` を呼び出すと、新しい認可 URL が発行されます。
+
 ## MCP ツールの呼び出し
 
 - Remote MCP クライアント: `http://localhost:8080/mcp` に接続すると、最初の SSE イベントで POST 先 (`/mcp/message?sessionId=...`) が通知されます。
@@ -36,6 +47,7 @@ Claude Code などからインターネット越しに接続させるには、HT
 
 | 選択肢 | 概要 | 推奨度 | メリット | 注意点 |
 | --- | --- | --- | --- | --- |
+| **Shuttle.dev** | Rust 専用ホスティングに `cargo shuttle deploy` でデプロイ。Axum + SSE に対応。 | ○ | Rust 開発者向けで設定が簡単 / 無料枠あり / Secrets 管理が容易 | HTTPS 終端と DCR レイヤーをアプリ側で提供する必要がある。カスタムドメインはプランを確認。 |
 | **Google Cloud Run + Cloud Load Balancing** | Axum サーバーをコンテナ化して Cloud Run にデプロイし、Managed TLS で HTTPS 公開。DCR エンドポイントはサーバー内の `/proxy/oauth/...` を利用。 | ◎ | 完全マネージドでスケール自動 / 証明書自動更新 / Google OAuth との親和性が高い | 初回は `gcloud run deploy` などのセットアップが必要。`config/config.toml` の `server.public_url` を公開ドメインに合わせること。 |
 | **Fly.io / Render / Railway** | Heroku 互換の PaaS にコンテナをそのままデプロイし、プラットフォーム付属の HTTPS を利用。 | ○ | セットアップが簡単で無料枠あり / 世界各リージョンに配置可能 | `config/tokens.json` を使う場合は永続ストレージ設定が必要。ドメイン設定と OAuth リダイレクト URI の更新を忘れずに。 |
 | **Cloudflare + 任意の Compute** | Axum サーバーを任意の VM/サービスで動かし、Cloudflare Tunnel や Reverse Proxy で HTTPS と DCR を公開。 | △ | Cloudflare WAF/Access などが利用できる / 既存ドメイン管理と統合しやすい | トンネル常駐プロセスやバックエンド環境の確保が別途必要。 |

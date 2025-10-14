@@ -12,7 +12,7 @@ use axum::http::header::{ACCESS_CONTROL_ALLOW_ORIGIN, WWW_AUTHENTICATE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Json, Redirect};
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     Extension, Router,
 };
 use chrono::{Duration, Utc};
@@ -25,6 +25,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/health", get(health))
         .route("/oauth/authorize", get(authorize))
         .route("/oauth/callback", get(callback))
+        .route("/oauth/token/:user_id", delete(clear_token))
         .route("/mcp/tool", post(handle_tool));
 
     if state
@@ -148,6 +149,25 @@ async fn callback(
         .context("failed to persist token")?;
 
     Ok((StatusCode::OK, Json(json!({ "status": "authorized" }))))
+}
+
+async fn clear_token(
+    Extension(state): Extension<Arc<AppState>>,
+    Path(user_id): Path<String>,
+) -> Result<impl IntoResponse, HandlerError> {
+    state
+        .token_storage
+        .revoke(&user_id)
+        .await
+        .context("failed to clear stored token")?;
+
+    {
+        let mut sessions = state.auth_sessions.write();
+        sessions.retain(|_, session| session.user_id != user_id);
+    }
+
+    tracing::info!(user_id = %user_id, "cleared stored credentials");
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn handle_tool(

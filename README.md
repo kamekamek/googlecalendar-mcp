@@ -9,6 +9,20 @@ Model Context Protocol (MCP) 準拠のエージェントから Google カレン�
 - **内蔵プロキシ**: Dynamic Client Registration (DCR) に対応し、Claude Code の OAuth 2.1 要件を満たす
 - **トークン永続化**: ファイルまたはメモリにトークンを保存し、自動リフレッシュ対応
 
+## デプロイ選択肢
+
+Remote MCP として公開したい場合は、以下のホスティングを検討できます。詳細な比較と推奨手順は `docs/design.md` の「Remote MCP 公開戦略」で解説しています。
+
+| 選択肢 | ひとことで | 推奨度 |
+| --- | --- | --- |
+| Google Cloud Run + Cloud Load Balancing | コンテナ化して完全マネージド運用 | ◎ |
+| Shuttle.dev | `cargo shuttle deploy` で Rust サービスをデプロイ | ○ |
+| VPS / 独自サーバー + Caddy | 自前で TLS / DCR を構成する柔軟な方法 | ○ |
+| Azure Container Apps | Azure 上でマネージド運用 | △ |
+| Cloudflare Workers / Tunnel | エッジ配信と既存インフラの組み合わせ | △ |
+
+> **メモ**: Claude Code は OAuth 2.1 + DCR を必須とするため、どのプラットフォームでも HTTPS 終端と DCR エンドポイント (`/proxy/oauth/...`) を公開できることが前提になります。
+
 ## 利用シナリオ
 
 このサーバーは2つの利用パターンに対応しています：
