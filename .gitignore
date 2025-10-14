@@ -5,6 +5,9 @@ config/tokens.json
 .env*
 !/.env.example
 
+# MCP configuration (contains user-specific settings)
+.mcp.json
+
 # Caddy configuration (contains absolute paths)
 caddyfile
 !caddyfile.example
