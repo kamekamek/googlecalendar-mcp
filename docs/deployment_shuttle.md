@@ -152,14 +152,17 @@ async fn shuttle(
 2. Secrets のアップロード  
    ```bash
    shuttle deploy --secrets Secrets.toml
+   # Makefile を利用する場合: make shuttle-deploy-secrets
    ```
 3. Deploy 実行（`Shuttle.toml` の設定に従い `--features shuttle` でビルド）  
    ```bash
    shuttle deploy
+   # Makefile を利用する場合: make shuttle-deploy
    ```
 4. ログ確認  
    ```bash
    shuttle logs --latest
+   # Makefile を利用する場合: make shuttle-logs
    ```
 
 ## 4. デプロイ後の確認

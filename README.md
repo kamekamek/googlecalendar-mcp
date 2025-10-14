@@ -81,10 +81,11 @@ APP__SECURITY__USE_IN_MEMORY="false"
 ### 4. サーバー起動
 
 ```bash
-cargo +nightly run
+make run
+# または cargo +nightly run --bin mcp_google_calendar
 ```
 
-デフォルトで `127.0.0.1:8080` で待ち受けます。
+デフォルトで `127.0.0.1:8080` で待ち受けます。Shuttle 向けバイナリをローカルで確認したい場合は `make run-shuttle` を利用できます。
 
 ### 5. OAuth 認証
 
@@ -113,7 +114,8 @@ curl -X POST http://localhost:8080/mcp/tool \
 ### テスト実行
 
 ```bash
-cargo +nightly test
+make test
+# または cargo +nightly test
 ```
 
 ---
