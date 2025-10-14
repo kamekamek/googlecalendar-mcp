@@ -12,7 +12,10 @@ use google_calendar::GoogleCalendarClient;
 use oauth::{storage::TokenStorage, AuthorizationContext, OAuthClient};
 use parking_lot::RwLock;
 use proxy::ProxyState;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use chrono::{DateTime, Utc};
 
@@ -22,6 +25,7 @@ pub struct AppState {
     pub google_calendar: GoogleCalendarClient,
     pub token_storage: Arc<dyn TokenStorage>,
     pub auth_sessions: Arc<RwLock<HashMap<String, AuthorizationSession>>>,
+    pub revoked_tokens: Arc<RwLock<HashMap<String, HashSet<String>>>>,
     pub proxy_state: Option<Arc<ProxyState>>,
 }
 
@@ -43,6 +47,7 @@ impl AppState {
             google_calendar,
             token_storage: storage,
             auth_sessions: Arc::new(RwLock::new(HashMap::new())),
+            revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
             proxy_state,
         })
     }

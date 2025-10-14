@@ -1,0 +1,7 @@
+name = "mcp-google-calendar"
+
+[build]
+features = ["shuttle"]
+
+[deploy]
+include = ["config/*.toml"]

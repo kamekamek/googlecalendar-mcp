@@ -11,3 +11,9 @@ caddyfile
 
 # Local certificates
 *.pem
+
+# Shuttle secrets files
+Secrets.toml
+Secrets.dev.toml
+.shuttle*
+Secrets*.toml

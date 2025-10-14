@@ -30,6 +30,18 @@ pub async fn ingest_bearer_token_from_headers(
         return Ok(None);
     }
 
+    {
+        let revoked = state.revoked_tokens.read();
+        if revoked
+            .get(user_id)
+            .map(|tokens| tokens.contains(token_part))
+            .unwrap_or(false)
+        {
+            tracing::info!(user_id = %user_id, "ignoring revoked bearer token from headers");
+            return Ok(None);
+        }
+    }
+
     let (refresh_token, refresh_present) = header_with_presence(
         headers,
         &["x-mcp-oauth-refresh-token", "x-oauth-refresh-token"],
@@ -93,6 +105,7 @@ pub async fn ingest_bearer_token_from_headers(
             .persist(user_id, &token_info)
             .await
             .map_err(BearerTokenError::Storage)?;
+        state.revoked_tokens.write().remove(user_id);
         if had_existing {
             tracing::info!(user_id = %user_id, "updated bearer token from headers");
         } else {

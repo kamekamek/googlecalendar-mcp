@@ -155,11 +155,27 @@ async fn clear_token(
     Extension(state): Extension<Arc<AppState>>,
     Path(user_id): Path<String>,
 ) -> Result<impl IntoResponse, HandlerError> {
+    let existing = state
+        .token_storage
+        .fetch(&user_id)
+        .await
+        .context("failed to inspect existing token")?;
     state
         .token_storage
         .revoke(&user_id)
         .await
         .context("failed to clear stored token")?;
+
+    if let Some(token) = existing {
+        if !token.access_token.is_empty() {
+            state
+                .revoked_tokens
+                .write()
+                .entry(user_id.clone())
+                .or_default()
+                .insert(token.access_token);
+        }
+    }
 
     {
         let mut sessions = state.auth_sessions.write();
