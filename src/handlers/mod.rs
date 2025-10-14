@@ -4,21 +4,21 @@ use crate::proxy::{
     ClientRegistrationResponse, OpenIdConfiguration as ProxyOpenIdConfiguration,
     ProtectedResourceMetadata as ProxyResourceMetadata, TokenRequest,
 };
-use crate::{oauth::TokenInfo, AppState, AuthorizationSession};
+use crate::token_ingest::{ingest_bearer_token_from_headers, BearerTokenError};
+use crate::{AppState, AuthorizationSession};
 use anyhow::Context;
 use axum::extract::{Form, Path, Query};
-use axum::http::header::{ACCESS_CONTROL_ALLOW_ORIGIN, AUTHORIZATION, WWW_AUTHENTICATE};
+use axum::http::header::{ACCESS_CONTROL_ALLOW_ORIGIN, WWW_AUTHENTICATE};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Json, Redirect};
 use axum::{
     routing::{get, post},
     Extension, Router,
 };
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
-use std::time::Duration as StdDuration;
 
 pub fn build_router(state: Arc<AppState>) -> Router {
     let mut router = Router::new()
@@ -156,7 +156,24 @@ async fn handle_tool(
     Json(request): Json<ToolRequest>,
 ) -> Result<impl IntoResponse, HandlerError> {
     if let Some(user_id) = request.user_id() {
-        maybe_store_bearer_token(&state, &headers, user_id).await?;
+        if let Err(err) = ingest_bearer_token_from_headers(&state, &headers, user_id).await {
+            match err {
+                BearerTokenError::InvalidUtf8(source) => {
+                    return Err(HandlerError::new(
+                        StatusCode::BAD_REQUEST,
+                        "authorization header must be valid UTF-8",
+                        Some(source.into()),
+                    ));
+                }
+                BearerTokenError::Storage(source) => {
+                    return Err(HandlerError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to persist bearer token",
+                        Some(source),
+                    ));
+                }
+            }
+        }
     }
 
     if let Some(user_id) = request.user_id() {
@@ -224,167 +241,6 @@ fn cleanup_sessions(state: &Arc<AppState>) {
     let cutoff = Utc::now() - Duration::minutes(10);
     let mut sessions = state.auth_sessions.write();
     sessions.retain(|_, session| session.created_at > cutoff);
-}
-
-async fn maybe_store_bearer_token(
-    state: &Arc<AppState>,
-    headers: &HeaderMap,
-    user_id: &str,
-) -> Result<(), HandlerError> {
-    let Some(raw_header) = headers.get(AUTHORIZATION) else {
-        return Ok(());
-    };
-
-    let header_value = raw_header.to_str().map_err(|err| {
-        HandlerError::new(
-            StatusCode::BAD_REQUEST,
-            "authorization header must be valid UTF-8",
-            Some(err.into()),
-        )
-    })?;
-
-    let mut parts = header_value.splitn(2, ' ');
-    let scheme = parts.next().unwrap_or_default();
-    let token_part = parts.next().unwrap_or_default().trim();
-
-    if !scheme.eq_ignore_ascii_case("Bearer") || token_part.is_empty() {
-        return Ok(());
-    }
-
-    let token_value = token_part.to_owned();
-    let (refresh_token, refresh_provided) = header_with_presence(
-        headers,
-        &["x-mcp-oauth-refresh-token", "x-oauth-refresh-token"],
-    );
-    let (scope, scope_provided) =
-        header_with_presence(headers, &["x-mcp-oauth-scope", "x-oauth-scope"]);
-    let (expires_at, expires_provided) = parse_expires_metadata(headers);
-    let (token_type_header, _) =
-        header_with_presence(headers, &["x-mcp-oauth-token-type", "x-oauth-token-type"]);
-    let default_token_type = if scheme.eq_ignore_ascii_case("bearer") {
-        "Bearer".to_owned()
-    } else {
-        scheme.to_owned()
-    };
-    let token_type = token_type_header.unwrap_or(default_token_type);
-
-    let existing_token = state.token_storage.fetch(user_id).await?;
-    let had_existing = existing_token.is_some();
-    let mut token_info = existing_token.unwrap_or(TokenInfo {
-        access_token: token_value.clone(),
-        refresh_token: refresh_token.clone(),
-        expires_at: expires_at.clone(),
-        scope: scope.clone(),
-        token_type: token_type.clone(),
-    });
-
-    let mut needs_persist = !had_existing;
-
-    if token_info.access_token != token_value {
-        token_info.access_token = token_value.clone();
-        needs_persist = true;
-    }
-
-    if refresh_provided && token_info.refresh_token != refresh_token {
-        token_info.refresh_token = refresh_token.clone();
-        needs_persist = true;
-    }
-
-    if scope_provided && token_info.scope != scope {
-        token_info.scope = scope.clone();
-        needs_persist = true;
-    }
-
-    if expires_provided && token_info.expires_at != expires_at {
-        token_info.expires_at = expires_at.clone();
-        needs_persist = true;
-    }
-
-    if token_info.token_type != token_type {
-        token_info.token_type = token_type.clone();
-        needs_persist = true;
-    }
-
-    if needs_persist {
-        state.token_storage.persist(user_id, &token_info).await?;
-        if had_existing {
-            tracing::info!(user_id = %user_id, "updated bearer token from Authorization header");
-        } else {
-            tracing::info!(user_id = %user_id, "stored bearer token from Authorization header");
-        }
-    }
-
-    Ok(())
-}
-
-fn header_with_presence(headers: &HeaderMap, names: &[&'static str]) -> (Option<String>, bool) {
-    for name in names {
-        if let Some(value) = headers.get(*name) {
-            match value.to_str() {
-                Ok(text) => {
-                    let trimmed = text.trim();
-                    if trimmed.is_empty() {
-                        return (None, true);
-                    } else {
-                        return (Some(trimmed.to_owned()), true);
-                    }
-                }
-                Err(err) => {
-                    tracing::warn!(header = *name, error = %err, "invalid header value");
-                    return (None, true);
-                }
-            }
-        }
-    }
-
-    (None, false)
-}
-
-fn parse_expires_metadata(headers: &HeaderMap) -> (Option<DateTime<Utc>>, bool) {
-    const EXPIRES_AT_HEADERS: &[&str] = &["x-mcp-oauth-expires-at", "x-oauth-expires-at"];
-    let (expires_at_raw, expires_at_present) = header_with_presence(headers, EXPIRES_AT_HEADERS);
-    if expires_at_present {
-        if let Some(raw) = expires_at_raw {
-            if let Ok(parsed) = DateTime::parse_from_rfc3339(&raw) {
-                return (Some(parsed.with_timezone(&Utc)), true);
-            }
-
-            if let Ok(epoch) = raw.parse::<i64>() {
-                if let Some(datetime) = DateTime::<Utc>::from_timestamp(epoch, 0) {
-                    return (Some(datetime), true);
-                }
-            }
-
-            tracing::warn!(raw_expires_at = %raw, "failed to parse expires-at header");
-        }
-
-        return (None, false);
-    }
-
-    const EXPIRES_IN_HEADERS: &[&str] = &["x-mcp-oauth-expires-in", "x-oauth-expires-in"];
-    let (expires_in_raw, expires_in_present) = header_with_presence(headers, EXPIRES_IN_HEADERS);
-    if expires_in_present {
-        if let Some(raw) = expires_in_raw {
-            match raw.parse::<f64>() {
-                Ok(seconds) if seconds.is_finite() && seconds >= 0.0 => {
-                    let std_duration = StdDuration::from_secs_f64(seconds);
-                    if let Ok(duration) = Duration::from_std(std_duration) {
-                        return (Some(Utc::now() + duration), true);
-                    }
-                }
-                Ok(_) => {
-                    tracing::warn!(raw_expires_in = %raw, "expires-in header must be non-negative");
-                }
-                Err(err) => {
-                    tracing::warn!(raw_expires_in = %raw, error = %err, "failed to parse expires-in header");
-                }
-            }
-        }
-
-        return (None, false);
-    }
-
-    (None, false)
 }
 
 fn issuer_from_auth_url(url: &str) -> Result<String, HandlerError> {

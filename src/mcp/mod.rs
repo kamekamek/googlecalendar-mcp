@@ -4,13 +4,15 @@ use crate::google_calendar::{
     CalendarEvent, EventPayload, GetEventParams, ListEventsParams, ListEventsResponse,
 };
 use crate::oauth::TokenInfo;
+use crate::token_ingest::{ingest_bearer_token_from_headers, BearerTokenError};
 use crate::AppState;
+use axum::http::request::Parts;
 use rmcp::{
     handler::server::{
         router::tool::ToolRouter,
         wrapper::{Json, Parameters},
     },
-    model::{Implementation, ProtocolVersion, ServerCapabilities, ServerInfo},
+    model::{Extensions, Implementation, ProtocolVersion, ServerCapabilities, ServerInfo},
     schemars, tool, tool_handler, tool_router, ErrorData, ServerHandler,
 };
 use schemars::JsonSchema;
@@ -30,47 +32,70 @@ impl CalendarService {
         }
     }
 
-    async fn ensure_token(&self, user_id: &str) -> Result<TokenInfo, ErrorData> {
-        let token_opt = self
+    async fn ensure_token(
+        &self,
+        user_id: &str,
+        extensions: &Extensions,
+    ) -> Result<TokenInfo, ErrorData> {
+        if let Some(parts) = extensions.get::<Parts>() {
+            if let Err(err) =
+                ingest_bearer_token_from_headers(&self.state, &parts.headers, user_id).await
+            {
+                match err {
+                    BearerTokenError::InvalidUtf8(source) => {
+                        return Err(ErrorData::invalid_request(
+                            format!("authorization header must be valid UTF-8: {source}"),
+                            None,
+                        ));
+                    }
+                    BearerTokenError::Storage(source) => {
+                        return Err(internal_error("token persist", source));
+                    }
+                }
+            }
+        }
+
+        let mut token = match self
             .state
             .token_storage
             .fetch(user_id)
             .await
-            .map_err(|err| internal_error("token fetch", err))?;
-
-        match token_opt {
-            Some(mut token) => {
-                if token.is_expired() {
-                    let refresh_token = token.refresh_token.clone().ok_or_else(|| {
-                        ErrorData::invalid_request(
-                            format!(
-                                "access token for user '{user_id}' is expired and lacks a refresh token"
-                            ),
-                            None,
-                        )
-                    })?;
-
-                    token = self
-                        .state
-                        .oauth_client
-                        .refresh_access_token(&refresh_token)
-                        .await
-                        .map_err(|err| internal_error("token refresh", err))?;
-
-                    self.state
-                        .token_storage
-                        .persist(user_id, &token)
-                        .await
-                        .map_err(|err| internal_error("token persist", err))?;
-                }
-
-                Ok(token)
+            .map_err(|err| internal_error("token fetch", err))?
+        {
+            Some(token) => token,
+            None => {
+                return Err(ErrorData::invalid_request(
+                    format!("user '{user_id}' is not authorized; complete OAuth flow"),
+                    None,
+                ));
             }
-            None => Err(ErrorData::invalid_request(
-                format!("user '{user_id}' is not authorized; complete OAuth flow"),
-                None,
-            )),
+        };
+
+        if token.is_expired() {
+            let refresh_token = token.refresh_token.clone().ok_or_else(|| {
+                ErrorData::invalid_request(
+                    format!(
+                        "access token for user '{user_id}' is expired and lacks a refresh token"
+                    ),
+                    None,
+                )
+            })?;
+
+            token = self
+                .state
+                .oauth_client
+                .refresh_access_token(&refresh_token)
+                .await
+                .map_err(|err| internal_error("token refresh", err))?;
+
+            self.state
+                .token_storage
+                .persist(user_id, &token)
+                .await
+                .map_err(|err| internal_error("token persist", err))?;
         }
+
+        Ok(token)
     }
 }
 
@@ -87,9 +112,10 @@ impl CalendarService {
     )]
     pub async fn list_events(
         &self,
+        extensions: Extensions,
         Parameters(ListEventsInput { user_id, params }): Parameters<ListEventsInput>,
     ) -> Result<Json<ListEventsResponse>, ErrorData> {
-        let token = self.ensure_token(&user_id).await?;
+        let token = self.ensure_token(&user_id, &extensions).await?;
         let data = self
             .state
             .google_calendar
@@ -110,13 +136,14 @@ impl CalendarService {
     )]
     pub async fn get_event(
         &self,
+        extensions: Extensions,
         Parameters(GetEventInput {
             user_id,
             event_id,
             calendar_id,
         }): Parameters<GetEventInput>,
     ) -> Result<Json<CalendarEvent>, ErrorData> {
-        let token = self.ensure_token(&user_id).await?;
+        let token = self.ensure_token(&user_id, &extensions).await?;
         let params = GetEventParams {
             event_id,
             calendar_id,
@@ -142,9 +169,10 @@ impl CalendarService {
     )]
     pub async fn create_event(
         &self,
+        extensions: Extensions,
         Parameters(CreateEventInput { user_id, payload }): Parameters<CreateEventInput>,
     ) -> Result<Json<CalendarEvent>, ErrorData> {
-        let token = self.ensure_token(&user_id).await?;
+        let token = self.ensure_token(&user_id, &extensions).await?;
         let event = self
             .state
             .google_calendar
@@ -166,13 +194,14 @@ impl CalendarService {
     )]
     pub async fn update_event(
         &self,
+        extensions: Extensions,
         Parameters(UpdateEventInput {
             user_id,
             event_id,
             payload,
         }): Parameters<UpdateEventInput>,
     ) -> Result<Json<CalendarEvent>, ErrorData> {
-        let token = self.ensure_token(&user_id).await?;
+        let token = self.ensure_token(&user_id, &extensions).await?;
         let event = self
             .state
             .google_calendar
@@ -276,7 +305,10 @@ impl HttpMcpServer {
             ToolRequest::List { user_id, params } => {
                 let Json(payload) = self
                     .service
-                    .list_events(Parameters(ListEventsInput { user_id, params }))
+                    .list_events(
+                        Extensions::default(),
+                        Parameters(ListEventsInput { user_id, params }),
+                    )
                     .await?;
                 let value = serde_json::to_value(payload)
                     .map_err(|err| internal_error("serialize list events", err.into()))?;
@@ -289,11 +321,14 @@ impl HttpMcpServer {
             } => {
                 let Json(payload) = self
                     .service
-                    .get_event(Parameters(GetEventInput {
-                        user_id,
-                        event_id,
-                        calendar_id,
-                    }))
+                    .get_event(
+                        Extensions::default(),
+                        Parameters(GetEventInput {
+                            user_id,
+                            event_id,
+                            calendar_id,
+                        }),
+                    )
                     .await?;
                 let value = serde_json::to_value(payload)
                     .map_err(|err| internal_error("serialize get event", err.into()))?;
@@ -302,7 +337,10 @@ impl HttpMcpServer {
             ToolRequest::Create { user_id, payload } => {
                 let Json(payload) = self
                     .service
-                    .create_event(Parameters(CreateEventInput { user_id, payload }))
+                    .create_event(
+                        Extensions::default(),
+                        Parameters(CreateEventInput { user_id, payload }),
+                    )
                     .await?;
                 let value = serde_json::to_value(payload)
                     .map_err(|err| internal_error("serialize create event", err.into()))?;
@@ -315,11 +353,14 @@ impl HttpMcpServer {
             } => {
                 let Json(payload) = self
                     .service
-                    .update_event(Parameters(UpdateEventInput {
-                        user_id,
-                        event_id,
-                        payload,
-                    }))
+                    .update_event(
+                        Extensions::default(),
+                        Parameters(UpdateEventInput {
+                            user_id,
+                            event_id,
+                            payload,
+                        }),
+                    )
                     .await?;
                 let value = serde_json::to_value(payload)
                     .map_err(|err| internal_error("serialize update event", err.into()))?;

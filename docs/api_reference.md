@@ -34,7 +34,7 @@ Response: `{ "status": "authorized" }` on success. Errors return HTTP 4xx/5xx wi
 
 The server exposes Model Context Protocol over Server-Sent Events using the official `rmcp` SSE transport.
 
-- **SSE stream:** `GET /mcp/sse`
+- **SSE stream:** `GET /mcp`
   - Responds with an SSE stream. The first event contains the message posting URL (`/mcp/message`).
   - Clients should keep the stream open and send JSON-RPC payloads to the POST endpoint indicated in the first event.
 - **JSON-RPC ingress:** `POST /mcp/message?sessionId=<id>`

@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
 
     let sse_config = SseServerConfig {
         bind: bind_address.parse()?,
-        sse_path: "/sse".to_string(),
+        sse_path: "/".to_string(),
         post_path: "/message".to_string(),
         ct: CancellationToken::new(),
         sse_keep_alive: None,
@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
     tracing::info!(
         bind_address = %bind_address,
         public_url = %state.config.server.public_url,
-        sse_path = "/mcp/sse",
+        sse_path = "/mcp",
         "starting server"
     );
 

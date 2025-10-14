@@ -6,6 +6,7 @@
 2. Google Cloud Console でリダイレクト URI `http://localhost:8080/oauth/callback` を持つ OAuth クライアント（ウェブアプリ型）を作成しておく。
 3. ルートにある `.env.example` を `.env` にコピーし、`APP__OAUTH__CLIENT_ID` / `APP__OAUTH__CLIENT_SECRET` を設定する。トークンをファイル保存したくない場合は `APP__SECURITY__USE_IN_MEMORY=true` を指定する。
 4. 必要に応じて `config/config.toml` でバインドアドレスや既定カレンダー ID、ストレージモードを調整する。
+5. Claude Code など DCR 対応クライアントを利用する場合は、`config/config.toml` で `proxy.enabled = true`（または `.env` で `APP__PROXY__ENABLED=true`）を有効化し、Google Cloud Console に `http://localhost:8080/proxy/oauth/callback`（必要に応じてカスタムドメイン）をリダイレクト URI として追加する。
 
 ## サーバーの起動
 

@@ -4,6 +4,7 @@ pub mod handlers;
 pub mod mcp;
 pub mod oauth;
 pub mod proxy;
+pub mod token_ingest;
 
 use anyhow::Result;
 use config::AppConfig;

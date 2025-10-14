@@ -97,6 +97,7 @@ Claude Code (CLI) は OAuth 2.1 + Dynamic Client Registration を必須とする
    - `POST /register` で MCP クライアント向けのクライアント資格を払い出し
    - 認可 / トークンエンドポイントを Google OAuth にブリッジ
    - HTTPS 証明書を設定 （Let’s Encrypt, mkcert など）
+   - `config/config.toml` または `.env` で `proxy.enabled = true`（もしくは `APP__PROXY__ENABLED=true`）を設定。Google 側には `http://<public-host>/proxy/oauth/callback`（デフォルト）をリダイレクト URI として登録しておく。
 
 2. **MCP サーバーへの中継**
    - プロキシから Axum サーバーの `/mcp/sse` と `/mcp/message` へリバースプロキシ
