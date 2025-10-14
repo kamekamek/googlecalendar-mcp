@@ -5,3 +5,5 @@ config/tokens.json
 .env*
 !/.env.example
 
+caddyfile
+*.pem

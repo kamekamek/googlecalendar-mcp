@@ -2,7 +2,8 @@
 # Bind address for the MCP bridge HTTP server
 bind_address = "127.0.0.1:8080"
 # Public URL exposed to Google OAuth. Must match the authorized redirect URI.
-public_url = "http://localhost:8080"
+public_url = "https://localhost:8443"
+# public_url = "http://localhost:8080"
 
 [oauth]
 # Replace with the Google Cloud console OAuth client credentials.

@@ -8,6 +8,8 @@ pub struct AppConfig {
     pub oauth: OAuthConfig,
     pub google: GoogleConfig,
     pub security: SecurityConfig,
+    #[serde(default)]
+    pub proxy: ProxyConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -83,6 +85,23 @@ impl SecurityConfig {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProxyConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub redirect_path: Option<String>,
+}
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            redirect_path: None,
+        }
+    }
+}
+
 impl AppConfig {
     pub fn load() -> Result<Self> {
         dotenvy::dotenv().ok();
@@ -125,6 +144,7 @@ mod tests {
                 encrypt_tokens: SecurityConfig::default_encrypt_tokens(),
                 use_in_memory: SecurityConfig::default_use_in_memory(),
             },
+            proxy: ProxyConfig::default(),
         };
 
         assert_eq!(cfg.server.bind_address, "127.0.0.1:8080");
@@ -134,5 +154,6 @@ mod tests {
         );
         assert!(!cfg.security.encrypt_tokens);
         assert!(!cfg.security.use_in_memory);
+        assert!(!cfg.proxy.enabled);
     }
 }
