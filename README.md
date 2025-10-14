@@ -422,6 +422,18 @@ lsof -i :8443
 - [ ] ローカル証明書が有効か（`mkcert -install` を実行済みか）
 - [ ] サーバーログに `stored bearer token from headers` が表示されるか
 
+### 6. 別アカウントで再認証したい
+
+**原因**: 指定した `user_id` に紐づくトークンが残っており、新しいアカウントで認証しても切り替わらない。
+
+**解決策**:
+
+```bash
+curl -X DELETE https://<サーバードメイン>/oauth/token/<user_id>
+```
+
+204 No Content が返れば削除成功です。削除後に `/oauth/authorize?user_id=<user_id>` を再度開くと、新しいアカウントで OAuth フローが実行されます。
+
 ---
 
 ## 関連ドキュメント

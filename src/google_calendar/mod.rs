@@ -275,7 +275,6 @@ impl<'de> Deserialize<'de> for EventDateTime {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct EventAttendee {
     pub email: String,

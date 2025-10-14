@@ -25,7 +25,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/health", get(health))
         .route("/oauth/authorize", get(authorize))
         .route("/oauth/callback", get(callback))
-        .route("/oauth/token/:user_id", delete(clear_token))
+        .route("/oauth/token/{user_id}", delete(clear_token))
         .route("/mcp/tool", post(handle_tool));
 
     if state
