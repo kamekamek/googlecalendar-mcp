@@ -27,9 +27,9 @@ Claude Code など、OAuth 2.1 + Dynamic Client Registration (DCR) を必須と�
 Mermaid による構成図:
 
 ```mermaid
-graph LR
-    subgraph Claude_Client[Claude Code / Desktop]
-        C1[MCP クライアント]
+flowchart LR
+    subgraph Claude_Client["Claude Code / Desktop"]
+        C1["MCP クライアント"]
     end
 
     C1 -- "HTTPS (SSE)" --> Proxy
@@ -49,6 +49,7 @@ graph LR
     style Proxy fill:#f5f5f5,stroke:#888
     style Server fill:#f5f5f5,stroke:#888
 ```
+# End of Selection
 
 
 運用時の注意点:
