@@ -5,5 +5,9 @@ config/tokens.json
 .env*
 !/.env.example
 
+# Caddy configuration (contains absolute paths)
 caddyfile
+!caddyfile.example
+
+# Local certificates
 *.pem

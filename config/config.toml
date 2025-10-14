@@ -28,3 +28,9 @@ token_store_path = "config/tokens.json"
 encrypt_tokens = false
 # When true, tokens are kept in memory only (token_store_path is ignored).
 use_in_memory = false
+
+[proxy]
+# Enable OAuth 2.1 + Dynamic Client Registration proxy for Claude Code and similar clients.
+enabled = false
+# OAuth callback path for the proxy. Defaults to "/proxy/oauth/callback".
+# redirect_path = "/proxy/oauth/callback"

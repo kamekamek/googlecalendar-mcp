@@ -1,0 +1,5 @@
+https://localhost:8443 {
+    # Replace with the absolute path to your certificate files
+    tls /path/to/your/mcp-server/localhost+2.pem /path/to/your/mcp-server/localhost+2-key.pem
+    reverse_proxy http://127.0.0.1:8080
+}
