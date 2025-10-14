@@ -3,7 +3,7 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use reqwest::Client;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use url::Url;
 
@@ -226,13 +226,55 @@ pub struct EventPayload {
     pub conference_data: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Default, JsonSchema)]
 pub struct EventDateTime {
     #[serde(rename = "dateTime", skip_serializing_if = "Option::is_none")]
     pub date_time: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time_zone: Option<String>,
 }
+
+impl<'de> Deserialize<'de> for EventDateTime {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            String(String),
+            Object(EventDateTimeObject),
+        }
+
+        #[derive(Deserialize)]
+        struct EventDateTimeObject {
+            #[serde(rename = "dateTime")]
+            date_time: Option<DateTime<Utc>>,
+            #[serde(default)]
+            time_zone: Option<String>,
+        }
+
+        let repr = Repr::deserialize(deserializer)?;
+        match repr {
+            Repr::String(value) => {
+                let parsed = DateTime::parse_from_rfc3339(&value).map_err(|err| {
+                    de::Error::custom(format!(
+                        "failed to parse RFC3339 date-time string '{value}': {err}"
+                    ))
+                })?;
+                Ok(EventDateTime {
+                    date_time: Some(parsed.with_timezone(&Utc)),
+                    time_zone: None,
+                })
+            }
+            Repr::Object(object) => Ok(EventDateTime {
+                date_time: object.date_time,
+                time_zone: object.time_zone,
+            }),
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct EventAttendee {
@@ -297,5 +339,16 @@ mod tests {
         let json = serde_json::to_value(&payload).unwrap();
         assert_eq!(json.get("summary").unwrap().as_str().unwrap(), "Test");
         assert!(json.get("location").is_none());
+    }
+
+    #[test]
+    fn event_date_time_accepts_rfc3339_string() {
+        let json = "\"2025-10-14T12:34:56Z\"";
+        let parsed: EventDateTime = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            parsed.date_time.unwrap().to_rfc3339(),
+            "2025-10-14T12:34:56+00:00"
+        );
+        assert!(parsed.time_zone.is_none());
     }
 }

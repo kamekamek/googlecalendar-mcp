@@ -7,7 +7,7 @@
 ## アーキテクチャ
 
 - **HTTP ファサード（Axum 0.8）** — OAuth エンドポイント (`/oauth/authorize`, `/oauth/callback`) と JSON ベースの MCP 用エンドポイント (`/mcp/tool`) を提供します。
-- **Remote MCP トランスポート（`rmcp::transport::sse_server`）** — `/mcp/sse` と `/mcp/message` で SSE ベースの MCP 通信を提供し、接続ごとに新しい `CalendarService` を立ち上げます。
+- **Remote MCP トランスポート（`rmcp::transport::sse_server`）** — `/mcp` (SSE) と `/mcp/message` で MCP 通信を提供し、接続ごとに新しい `CalendarService` を立ち上げます。
 - **OAuth モジュール（`src/oauth`）** — `oauth2` クレートを用いて PKCE チャレンジ、認可コード交換、トークン更新、トークン永続化を扱います。
 - **トークンストレージ**
   - `FileTokenStorage` — `config/tokens.json` に永続化。`RwLock` でキャッシュを保護し、将来的に別ストレージへ差し替えられる構造です。
@@ -65,6 +65,30 @@ flowchart LR
 2. トークンが未保存の場合、サーバーは `401` とともに認可 URL（PKCE の state を含む）を返す。
 3. ユーザーが認可フローを完了すると、Google から `/oauth/callback` にリダイレクトされる。
 4. コールバックでトークンを交換＆保存し、以後はツール呼び出しが成功する。
+
+## Remote MCP 公開戦略
+
+Claude Code など外部クライアントへサーバーを公開する際の選択肢と推奨度を以下にまとめる。
+
+| 選択肢 | 推奨度 | 概要 | メリット | 注意点 |
+|---|---|---|---|---|
+| **A. HTTPS + 自前 DCR プロキシ (現行構成)** | ◎ | Axum サーバーはローカルポートで待ち受け、Caddy/Nginx 等のプロキシで HTTPS 終端と Dynamic Client Registration を提供する。Claude などは `https://mcp.example.com/mcp` に接続。 | ・Claude の OAuth 2.1 + DCR 要件を満たせる<br>・Google OAuth の既存クライアント ID/Secret を流用できる<br>・SSE と HTTP シムを統一的に管理できる | ・プロキシの構築・証明書更新が必要<br>・Authorization ヘッダー経由のトークン取り込みが必須 (v2025-10-14 時点では `token_ingest` で対応) |
+| **B. Claude Desktop カスタムコネクタ** | ○ | Claude Desktop 上の Custom Connector で `client_id`/`client_secret` を直接指定し、HTTPS で本サーバー (または簡易プロキシ) に接続。 | ・DCR 実装不要<br>・ローカル環境で閉じた利用が容易 | ・利用者ごとに設定が必要<br>・資格情報の配布を慎重に扱う必要がある |
+| **C. STDIO MCP サーバー (ローカル連携)** | △ | `rmcp::transport::stdio_server` を利用し、エージェントと同一マシン内で標準入出力通信を行う。 | ・ネットワーク公開が不要<br>・OAuth をサーバープロセス内で完結できる | ・対応クライアントが限られる (Claude Code は Remote MCP 推奨)<br>・各端末でプロセス常駐が必要 |
+| **D. マネージド OAuth ブリッジ (Apigee / API Gateway 等)** | △ | Google Cloud API Gateway、Apigee、Envoy などで OAuth ブリッジを構築し、MCP サーバーを保護する。 | ・TLS やスケーリングをクラウド側に委任できる<br>・監査・レート制御などの機能を活用できる | ・DCR 機能の有無を事前検証する必要がある<br>・設定が複雑になりがちで、カスタムコードを伴う場合がある |
+
+### 推奨デプロイ手順 (A案)
+1. Axum サーバーは内部ポート (例: `127.0.0.1:8080`) で起動し、`server.public_url` を公開ドメイン (`https://mcp.example.com`) に合わせる。
+2. Caddy/Nginx 等で `https://mcp.example.com/mcp` → `http://127.0.0.1:8080/mcp` をリバースプロキシする。SSE は長時間接続となるため、タイムアウトを十分に延ばす。
+3. プロキシ側で DCR エンドポイント (`/.well-known/oauth-authorization-server`, `/proxy/oauth/register` 等) を実装し、Google OAuth の固定クライアントと橋渡しする。
+4. Claude 側設定 (`.mcp.json` やワークスペース設定) でプロキシ URL を指定する。
+5. 初回接続後、サーバーログの `stored bearer token from headers`/`updated bearer token from headers` を確認し、`config/tokens.json` へトークンが保存されているか検証する。
+
+### 運用チェックリスト
+- TLS 証明書の有効期限監視 (mkcert なら端末ごとの再発行手順、Let’s Encrypt なら自動更新ジョブ)
+- プロキシのアイドルタイムアウト設定 (SSE のため keep-alive を長めに設定)
+- Google Cloud Console のリダイレクト URI が最新のプロキシ構成と一致しているか (`/proxy/oauth/callback` 等)
+- 障害解析手順として、`.claude/debug/latest` とサーバーの `latest.log` をタイムスタンプで突き合わせるフローを README/Runbook に記載する
 
 ## セキュリティ上の考慮事項
 
