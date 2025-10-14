@@ -4,9 +4,12 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
+    #[serde(default)]
     pub server: ServerConfig,
     pub oauth: OAuthConfig,
+    #[serde(default)]
     pub google: GoogleConfig,
+    #[serde(default)]
     pub security: SecurityConfig,
     #[serde(default)]
     pub proxy: ProxyConfig,
@@ -30,18 +33,42 @@ impl ServerConfig {
     }
 }
 
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            bind_address: Self::default_bind_address(),
+            public_url: Self::default_public_url(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct OAuthConfig {
     pub client_id: String,
     pub client_secret: String,
+    #[serde(default = "OAuthConfig::default_auth_url")]
     pub auth_url: String,
+    #[serde(default = "OAuthConfig::default_token_url")]
     pub token_url: String,
+    #[serde(default = "OAuthConfig::default_redirect_uri")]
     pub redirect_uri: String,
     #[serde(default = "OAuthConfig::default_scopes")]
     pub scopes: Vec<String>,
 }
 
 impl OAuthConfig {
+    fn default_auth_url() -> String {
+        "https://accounts.google.com/o/oauth2/v2/auth".to_owned()
+    }
+
+    fn default_token_url() -> String {
+        "https://oauth2.googleapis.com/token".to_owned()
+    }
+
+    fn default_redirect_uri() -> String {
+        "http://localhost:8080/oauth/callback".to_owned()
+    }
+
     fn default_scopes() -> Vec<String> {
         vec!["https://www.googleapis.com/auth/calendar".to_owned()]
     }
@@ -58,6 +85,15 @@ pub struct GoogleConfig {
 impl GoogleConfig {
     fn default_api_base() -> String {
         "https://www.googleapis.com/calendar/v3".to_owned()
+    }
+}
+
+impl Default for GoogleConfig {
+    fn default() -> Self {
+        Self {
+            api_base: Self::default_api_base(),
+            calendar_id: None,
+        }
     }
 }
 
@@ -82,6 +118,16 @@ impl SecurityConfig {
 
     fn default_use_in_memory() -> bool {
         false
+    }
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            token_store_path: Self::default_token_store_path(),
+            encrypt_tokens: Self::default_encrypt_tokens(),
+            use_in_memory: Self::default_use_in_memory(),
+        }
     }
 }
 
