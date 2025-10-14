@@ -2,9 +2,10 @@ use crate::oauth::TokenInfo;
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use reqwest::Client;
-use schemars::JsonSchema;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+use std::borrow::Cow;
 use url::Url;
 
 #[derive(Clone)]
@@ -257,19 +258,24 @@ pub struct EventDateTime {
 }
 
 impl JsonSchema for EventDateTime {
-    fn schema_name() -> String {
-        "EventDateTime".to_string()
+    fn schema_name() -> Cow<'static, str> {
+        Cow::Borrowed("EventDateTime")
     }
 
-    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
         // MCP clients should pass RFC3339 strings like "2025-10-15T18:30:00+09:00"
         // The deserializer will accept both strings and objects, but we advertise
         // strings in the schema for simplicity.
-        let mut schema = String::json_schema(gen).into_object();
-        schema.metadata().description = Some(
-            "RFC3339 date-time string (e.g., \"2025-10-15T18:30:00+09:00\")".to_string(),
-        );
-        schema.into()
+        let mut schema = String::json_schema(gen);
+        if let Some(object) = schema.as_object_mut() {
+            object.insert(
+                "description".to_string(),
+                serde_json::Value::String(
+                    "RFC3339 date-time string (e.g., \"2025-10-15T18:30:00+09:00\")".to_string(),
+                ),
+            );
+        }
+        schema
     }
 }
 
