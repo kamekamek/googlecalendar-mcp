@@ -63,6 +63,7 @@ https://localhost:8443 {
   - `x-mcp-oauth-expires-at` (RFC 3339 または Unix 秒) もしくは `x-mcp-oauth-expires-in`
   - トークンタイプ (`x-mcp-oauth-token-type`)
 - 保存対象のストレージは設定に従って切り替わるため、`security.use_in_memory = true` の場合はプロセス終了と同時にトークンが消える。永続化したい場合は `use_in_memory = false` とし、`config/tokens.json` の権限を確認する。
+- `DELETE /oauth/token/<user_id>` で保存済みトークンをクリアしてから `/oauth/authorize` を再開すると、別アカウントでの再認証が確実に行える。
 
 ### 10.3 プロキシの WARN ログの扱い
 - Caddy の `http.handlers.reverse_proxy aborting with incomplete response` + `context canceled` は、SSE クライアントが自発的に切断／再接続した場合にも出る既定の WARN。単発であれば問題なし。
