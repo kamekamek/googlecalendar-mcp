@@ -40,3 +40,8 @@ shuttle = ["shuttle-runtime", "shuttle-axum", "shuttle-shared-db", "sqlx"]
 
 [dev-dependencies]
 tempfile = "3.9"
+
+[[bin]]
+name = "shuttle"
+path = "src/bin/shuttle.rs"
+required-features = ["shuttle"]
