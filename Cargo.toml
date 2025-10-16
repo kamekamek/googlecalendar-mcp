@@ -36,7 +36,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5"
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
-rand = "0.8"
+rand = "0.9"
 
 # Shuttle.dev dependencies (optional for deployment)
 shuttle-runtime = { version = "0.57", optional = true }
