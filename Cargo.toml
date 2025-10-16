@@ -2,6 +2,15 @@
 name = "mcp_google_calendar"
 version = "0.1.0"
 edition = "2021"
+authors = ["mcp-google-calendar contributors"]
+description = "MCP server for Google Calendar with OAuth 2.0 support - Bridge AI agents to Calendar API"
+license = "MIT"
+repository = "https://github.com/kamekamek/mcp-google-calendar"
+homepage = "https://github.com/kamekamek/mcp-google-calendar"
+documentation = "https://github.com/kamekamek/mcp-google-calendar/tree/main/docs"
+readme = "README.md"
+keywords = ["mcp", "google-calendar", "oauth", "ai-agents", "calendar"]
+categories = ["api-bindings", "web-programming", "authentication"]
 
 [dependencies]
 anyhow = "1.0"

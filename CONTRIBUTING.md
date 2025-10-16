@@ -133,7 +133,7 @@ src/
 ### Reporting Security Issues
 **Do not open public issues for security vulnerabilities.**
 
-Instead, email security concerns to: [your-security-email] or open a private security advisory on GitHub.
+Instead, please use [GitHub Security Advisories](https://github.com/kamekamek/mcp-google-calendar/security/advisories/new) to report security vulnerabilities privately.
 
 ### Security Guidelines
 - Never commit credentials (`.env`, `Secrets.toml`, `*.pem`)
@@ -145,7 +145,7 @@ Instead, email security concerns to: [your-security-email] or open a private sec
 ## Community
 
 ### Code of Conduct
-This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+This project adheres to professional and respectful collaboration standards. By participating, you agree to maintain a welcoming and inclusive environment for all contributors.
 
 ### Getting Help
 - Read the [documentation](docs/)
