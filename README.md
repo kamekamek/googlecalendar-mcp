@@ -7,6 +7,7 @@
 
 Axum-based MCP bridge that lets coding agents read and write Google Calendar events. This README summarises the essentials in English and Japanese so you can set up, run, and test the server quickly.
 
+
 ---
 
 ## English Guide
