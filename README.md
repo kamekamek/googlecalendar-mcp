@@ -142,6 +142,14 @@ Each tool enforces OAuth presence. Unauthorized calls return an MCP error that i
 
 Logs use the `tracing` crate. Set `RUST_LOG=info` (or `debug`) to control verbosity during development.
 
+### AI-Assisted Development
+This project integrates both **Claude Code** and **OpenAI Codex** for development assistance:
+
+- **Claude Code** (`@claude`) — Interactive code reviews, architecture discussions, and refactoring guidance via GitHub issues/PRs
+- **Codex CI** — Automated CI/CD analysis that diagnoses build failures, test errors, and clippy warnings on every push/PR
+
+To enable Codex CI integration, add your `OPENAI_API_KEY` to repository secrets. See [`docs/codex-integration.md`](docs/codex-integration.md) for detailed setup instructions and usage examples.
+
 ## Troubleshooting
 > [!WARNING]
 > `failed to parse RFC3339 date-time string` means `start` and `end` must be provided as RFC3339 strings (e.g., `2025-10-15T06:00:00+09:00`).
