@@ -1,0 +1,80 @@
+[workspace]
+# Automatically update CHANGELOG.md with release notes
+changelog_update = true
+# Git tag format
+git_tag_name = "v{{ version }}"
+# Enable GitHub release creation
+git_release_enable = true
+# Release type (using GitHub releases)
+git_release_type = "prod"
+
+[changelog]
+# Changelog header
+header = """# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+"""
+
+# Changelog template for each release
+body = """
+{% if version -%}
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## [Unreleased]
+{% endif -%}
+
+{% for commit in commits %}
+  {% if commit.breaking -%}
+### ⚠ BREAKING CHANGES
+- {{ commit.message | upper }}
+  {% endif -%}
+{% endfor -%}
+
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+  - {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}]({{ commit.link }}))
+{%- endfor %}
+{% endfor %}
+"""
+
+# Commit groups for changelog organization
+# Array of inline tables format
+commit_parsers = [
+  { message = "^[Aa]dd", group = "Added" },
+  { message = "^[Ff]eat", group = "Added" },
+  { message = "^[Ss]upport", group = "Added" },
+  { message = "^[Ii]mplement", group = "Added" },
+  { message = "^[Ff]ix", group = "Fixed" },
+  { message = "^[Rr]esolve", group = "Fixed" },
+  { message = "^[Cc]hange", group = "Changed" },
+  { message = "^[Mm]odify", group = "Changed" },
+  { message = "^[Uu]pdate", group = "Changed" },
+  { message = "^[Rr]efactor", group = "Changed" },
+  { message = "^[Ee]nhance", group = "Changed" },
+  { message = "^[Ii]mprove", group = "Changed" },
+  { message = "^[Rr]emove", group = "Removed" },
+  { message = "^[Dd]elete", group = "Removed" },
+  { message = "^[Dd]eprec", group = "Deprecated" },
+  { message = "^[Ss]ecur", group = "Security" },
+  { message = "^[Dd]oc", group = "Documentation" },
+  { message = "^[Tt]est", group = "Tests" },
+  { message = "^[Pp]erf", group = "Performance" },
+  { message = "^[Bb]uild", group = "Build" },
+  { message = "^[Cc][Ii]", group = "CI/CD" },
+  { message = "^[Mm]erge", skip = true },
+  { message = "^\\[skip", skip = true },
+]
+
+# Package-specific configuration
+[[package]]
+name = "mcp_google_calendar"
+# Publish to crates.io (set to false if private)
+publish = false
+# Changelog path
+changelog_path = "CHANGELOG.md"
+# Whether to update changelog
+changelog_update = true
