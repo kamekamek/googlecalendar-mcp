@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use reqwest::Client;
 use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use url::Url;
 
 #[derive(Clone)]
@@ -228,12 +228,16 @@ pub struct EventPayload {
 
     /// Start date-time in RFC3339 format (e.g., "2025-10-15T18:30:00+09:00")
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(description = "Start date-time as RFC3339 string (e.g., \"2025-10-15T18:30:00+09:00\")")]
+    #[schemars(
+        description = "Start date-time as RFC3339 string (e.g., \"2025-10-15T18:30:00+09:00\")"
+    )]
     pub start: Option<EventDateTime>,
 
     /// End date-time in RFC3339 format (e.g., "2025-10-15T20:30:00+09:00")
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(description = "End date-time as RFC3339 string (e.g., \"2025-10-15T20:30:00+09:00\")")]
+    #[schemars(
+        description = "End date-time as RFC3339 string (e.g., \"2025-10-15T20:30:00+09:00\")"
+    )]
     pub end: Option<EventDateTime>,
 
     /// List of event attendees
