@@ -1,5 +1,10 @@
 # Google Calendar MCP Server
 
+[![CI](https://github.com/kamekamek/mcp-google-calendar/workflows/CI/badge.svg)](https://github.com/kamekamek/mcp-google-calendar/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
+[![MCP](https://img.shields.io/badge/MCP-0.8.1-green.svg)](https://modelcontextprotocol.io/)
+
 Model Context Protocol (MCP) bridge that lets AI coding agents read and write Google Calendar events with minimal setup. The server exposes both Remote MCP over Server-Sent Events and JSON-based HTTP helpers so you can integrate it from Claude Code, Codex CLI, or your own tooling.
 
 > [!IMPORTANT]

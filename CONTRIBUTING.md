@@ -145,7 +145,7 @@ Instead, please use [GitHub Security Advisories](https://github.com/kamekamek/mc
 ## Community
 
 ### Code of Conduct
-This project adheres to professional and respectful collaboration standards. By participating, you agree to maintain a welcoming and inclusive environment for all contributors.
+This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
 ### Getting Help
 - Read the [documentation](docs/)
