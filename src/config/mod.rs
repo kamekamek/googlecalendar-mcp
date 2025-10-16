@@ -131,21 +131,12 @@ impl Default for SecurityConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct ProxyConfig {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
     pub redirect_path: Option<String>,
-}
-
-impl Default for ProxyConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            redirect_path: None,
-        }
-    }
 }
 
 impl AppConfig {

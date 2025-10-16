@@ -67,7 +67,7 @@ pub async fn ingest_bearer_token_from_headers(
     let mut token_info = existing.unwrap_or(TokenInfo {
         access_token: token_part.to_owned(),
         refresh_token: refresh_token.clone(),
-        expires_at: expires_at.clone(),
+        expires_at,
         scope: scope.clone(),
         token_type: token_type.clone(),
     });
@@ -90,7 +90,7 @@ pub async fn ingest_bearer_token_from_headers(
     }
 
     if expires_present && token_info.expires_at != expires_at {
-        token_info.expires_at = expires_at.clone();
+        token_info.expires_at = expires_at;
         needs_persist = true;
     }
 
