@@ -68,7 +68,7 @@ impl OAuthClient {
         Ok(Self { client, scopes })
     }
 
-    pub fn authorize_url(&self, redirect_uri: &str) -> Result<AuthorizationContext> {
+    pub fn authorize_url(&self, redirect_uri: &str, resource: Option<&str>) -> Result<AuthorizationContext> {
         let redirect = RedirectUrl::new(redirect_uri.to_owned())
             .map_err(|err| anyhow!("invalid redirect url: {err}"))?;
 
@@ -79,6 +79,12 @@ impl OAuthClient {
             .authorize_url(CsrfToken::new_random)
             .set_pkce_challenge(pkce_challenge)
             .add_extra_param("prompt", "select_account");
+
+        // RFC 8707: Resource Indicators for OAuth 2.0
+        if let Some(resource_uri) = resource {
+            tracing::debug!(resource = %resource_uri, "adding resource parameter to authorization request");
+            request = request.add_extra_param("resource", resource_uri);
+        }
 
         for scope in &self.scopes {
             request = request.add_scope(scope.clone());
@@ -98,16 +104,24 @@ impl OAuthClient {
         redirect_uri: &str,
         authorization_code: &str,
         pkce_verifier: &str,
+        resource: Option<&str>,
     ) -> Result<TokenInfo> {
         let redirect = RedirectUrl::new(redirect_uri.to_owned())
             .map_err(|err| anyhow!("invalid redirect url: {err}"))?;
 
         let client = self.client.clone().set_redirect_uri(redirect);
-        let token = client
+
+        let mut request = client
             .exchange_code(AuthorizationCode::new(authorization_code.to_owned()))
-            .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier.to_owned()))
-            .request_async(async_http_client)
-            .await?;
+            .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier.to_owned()));
+
+        // RFC 8707: Resource Indicators for OAuth 2.0
+        if let Some(resource_uri) = resource {
+            tracing::debug!(resource = %resource_uri, "adding resource parameter to token request");
+            request = request.add_extra_param("resource", resource_uri);
+        }
+
+        let token = request.request_async(async_http_client).await?;
 
         Self::map_token_response(token)
     }

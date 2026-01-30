@@ -98,9 +98,13 @@ async fn authorize(
     let redirect_uri = query
         .redirect_uri
         .unwrap_or_else(|| state.config.oauth.redirect_uri.clone());
+
+    // RFC 8707: Canonical URI of MCP server
+    let resource = Some(state.config.server.public_url.trim_end_matches('/'));
+
     let context = state
         .oauth_client
-        .authorize_url(&redirect_uri)
+        .authorize_url(&redirect_uri, resource)
         .context("failed to build authorization url")?;
 
     let session = AuthorizationSession {
@@ -132,12 +136,16 @@ async fn callback(
     }
     .ok_or_else(|| HandlerError::unauthorized("invalid or expired state"))?;
 
+    // RFC 8707: Canonical URI of MCP server
+    let resource = Some(state.config.server.public_url.trim_end_matches('/'));
+
     let token = state
         .oauth_client
         .exchange_code(
             &state.config.oauth.redirect_uri,
             &query.code,
             &session.state.pkce_verifier,
+            resource,
         )
         .await
         .context("failed to exchange authorization code")?;
@@ -214,9 +222,12 @@ async fn handle_tool(
 
     if let Some(user_id) = request.user_id() {
         if state.token_storage.fetch(user_id).await?.is_none() {
+            // RFC 8707: Canonical URI of MCP server
+            let resource = Some(state.config.server.public_url.trim_end_matches('/'));
+
             let context = state
                 .oauth_client
-                .authorize_url(&state.config.oauth.redirect_uri)?;
+                .authorize_url(&state.config.oauth.redirect_uri, resource)?;
             let session = AuthorizationSession {
                 user_id: user_id.to_string(),
                 state: context.clone(),
@@ -243,9 +254,13 @@ async fn handle_tool(
                 protected_resource_metadata_url(&state.config.server.public_url)
             };
             let resource_id = state.config.server.public_url.trim_end_matches('/');
+
+            // RFC 9110 Section 11.6.1: scope parameter in WWW-Authenticate
+            // MCP OAuth spec recommends including scope for principle of least privilege
+            let scope = state.config.oauth.scopes.join(" ");
             let header_value = format!(
-                "Bearer resource=\"{}\", resource_metadata=\"{}\"",
-                resource_id, metadata_url
+                "Bearer resource=\"{}\", resource_metadata=\"{}\", scope=\"{}\"",
+                resource_id, metadata_url, scope
             );
 
             let mut response = (StatusCode::UNAUTHORIZED, Json(response)).into_response();

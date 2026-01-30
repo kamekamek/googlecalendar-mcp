@@ -223,6 +223,14 @@ impl ProxyState {
             .append_pair("state", &proxy_state)
             .append_pair("prompt", "select_account");
 
+        // RFC 8707: Resource Indicators for OAuth 2.0
+        if let Some(resource) = &params.resource {
+            tracing::debug!(resource = %resource, "forwarding resource parameter to Google OAuth");
+            google_url
+                .query_pairs_mut()
+                .append_pair("resource", resource);
+        }
+
         if let Some(challenge) = &params.code_challenge {
             google_url
                 .query_pairs_mut()
@@ -308,6 +316,12 @@ impl ProxyState {
 
         if let Some(verifier) = &form.code_verifier {
             request.push(("code_verifier", verifier.as_str()));
+        }
+
+        // RFC 8707: Resource Indicators for OAuth 2.0
+        if let Some(resource) = &form.resource {
+            tracing::debug!(resource = %resource, "forwarding resource parameter to Google token endpoint");
+            request.push(("resource", resource.as_str()));
         }
 
         let response = self
@@ -396,6 +410,9 @@ pub struct AuthorizationParams {
     pub code_challenge: Option<String>,
     #[serde(default)]
     pub code_challenge_method: Option<String>,
+    // RFC 8707: Resource Indicators for OAuth 2.0
+    #[serde(default)]
+    pub resource: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -407,6 +424,9 @@ pub struct TokenRequest {
     pub client_secret: String,
     #[serde(default)]
     pub code_verifier: Option<String>,
+    // RFC 8707: Resource Indicators for OAuth 2.0
+    #[serde(default)]
+    pub resource: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
