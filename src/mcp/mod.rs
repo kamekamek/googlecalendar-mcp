@@ -97,6 +97,45 @@ impl CalendarService {
 
         Ok(token)
     }
+
+    /// 各操作に必要な最小スコープを返す
+    fn required_scope_for_operation(operation: &str) -> &'static str {
+        match operation {
+            "list_events" | "get_event" => {
+                // Read操作 - calendar.eventsスコープが必要
+                "https://www.googleapis.com/auth/calendar.events"
+            }
+            "create_event" | "update_event" => {
+                // Write操作 - calendar.eventsスコープが必要
+                "https://www.googleapis.com/auth/calendar.events"
+            }
+            _ => "https://www.googleapis.com/auth/calendar.events",
+        }
+    }
+
+    /// Google Calendar APIエラーをMCPエラーに変換（insufficient_scope検出付き）
+    fn handle_calendar_error(operation: &str, err: anyhow::Error) -> ErrorData {
+        let err_str = err.to_string();
+        if err_str.starts_with("insufficient_scope:") {
+            let description = err_str
+                .strip_prefix("insufficient_scope:")
+                .unwrap_or("")
+                .trim();
+            let required_scope = Self::required_scope_for_operation(operation);
+
+            ErrorData::invalid_request(
+                format!("Insufficient OAuth scope: {}", description),
+                Some(serde_json::json!({
+                    "__mcp_oauth_error": "insufficient_scope",
+                    "required_scope": required_scope,
+                    "description": description,
+                    "operation": operation
+                })),
+            )
+        } else {
+            internal_error(operation, err)
+        }
+    }
 }
 
 #[tool_router]
@@ -121,7 +160,7 @@ impl CalendarService {
             .google_calendar
             .list_events(&token, &params)
             .await
-            .map_err(|err| internal_error("list events", err))?;
+            .map_err(|err| Self::handle_calendar_error("list_events", err))?;
         Ok(Json(data))
     }
 
@@ -153,7 +192,7 @@ impl CalendarService {
             .google_calendar
             .get_event(&token, &params)
             .await
-            .map_err(|err| internal_error("get event", err))?;
+            .map_err(|err| Self::handle_calendar_error("get_event", err))?;
         Ok(Json(event))
     }
 
@@ -178,7 +217,7 @@ impl CalendarService {
             .google_calendar
             .create_event(&token, &payload)
             .await
-            .map_err(|err| internal_error("create event", err))?;
+            .map_err(|err| Self::handle_calendar_error("create_event", err))?;
         Ok(Json(event))
     }
 
@@ -207,7 +246,7 @@ impl CalendarService {
             .google_calendar
             .update_event(&token, &event_id, &payload)
             .await
-            .map_err(|err| internal_error("update event", err))?;
+            .map_err(|err| Self::handle_calendar_error("update_event", err))?;
         Ok(Json(event))
     }
 }

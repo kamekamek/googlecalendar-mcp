@@ -279,8 +279,56 @@ async fn handle_tool(
         }
     }
 
-    let server = HttpMcpServer::new(state);
+    let server = HttpMcpServer::new(state.clone());
     let response = server.handle_request(request).await;
+
+    // insufficient_scopeエラーを検出して403 + WWW-Authenticateレスポンスに変換
+    if response.status == crate::mcp::ResponseStatus::Error {
+        if let Some(data) = &response.data {
+            if let Some(error_type) = data.get("__mcp_oauth_error") {
+                if error_type == "insufficient_scope" {
+                    // 403 Forbiddenレスポンスを構築
+                    let metadata_url = if let Some(proxy) = state.proxy_state.as_ref() {
+                        proxy.protected_resource_metadata.clone()
+                    } else {
+                        protected_resource_metadata_url(&state.config.server.public_url)
+                    };
+                    let resource_id = state.config.server.public_url.trim_end_matches('/');
+                    let scope = data
+                        .get("required_scope")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&state.config.oauth.scopes.join(" "));
+                    let description = data
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Insufficient OAuth scope for this operation");
+
+                    // RFC 6750 Section 3: WWW-Authenticate header with insufficient_scope
+                    let header_value = format!(
+                        "Bearer error=\"insufficient_scope\", scope=\"{}\", resource=\"{}\", resource_metadata=\"{}\", error_description=\"{}\"",
+                        scope, resource_id, metadata_url, description
+                    );
+
+                    let mut http_response =
+                        (StatusCode::FORBIDDEN, Json(response)).into_response();
+                    http_response.headers_mut().insert(
+                        WWW_AUTHENTICATE,
+                        HeaderValue::from_str(&header_value).map_err(|err| {
+                            HandlerError::new(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "failed to construct WWW-Authenticate header",
+                                Some(err.into()),
+                            )
+                        })?,
+                    );
+
+                    return Ok(http_response);
+                }
+            }
+        }
+    }
+
+    // 通常のエラー/成功レスポンス
     let status = match response.status {
         crate::mcp::ResponseStatus::Success => StatusCode::OK,
         crate::mcp::ResponseStatus::Error => StatusCode::BAD_REQUEST,
@@ -450,6 +498,7 @@ async fn proxy_authorize(
     let proxy = require_proxy_state(&state)?;
     let url = proxy
         .start_authorization(&params)
+        .await
         .map_err(|err| HandlerError::new(StatusCode::BAD_REQUEST, err.to_string(), Some(err)))?;
     Ok(Redirect::to(&url))
 }

@@ -4,6 +4,9 @@ bind_address = "127.0.0.1:8080"
 # Public URL exposed to Google OAuth. Must match the authorized redirect URI.
 public_url = "https://localhost:8443"
 # public_url = "http://localhost:8080"
+# Cloud Run example:
+# bind_address = "0.0.0.0:8080"
+# public_url = "https://your-service-url"
 
 [oauth]
 # Replace with the Google Cloud console OAuth client credentials.
@@ -12,6 +15,8 @@ client_secret = "GOOGLE_OAUTH_CLIENT_SECRET"
 auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://oauth2.googleapis.com/token"
 redirect_uri = "http://localhost:8080/oauth/callback"
+# Cloud Run (proxy enabled) example:
+# redirect_uri = "https://your-service-url/proxy/oauth/callback"
 # Scope list can be extended if additional permissions are required.
 scopes = ["https://www.googleapis.com/auth/calendar.events"]
 

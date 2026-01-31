@@ -3,8 +3,10 @@ NIGHTLY ?= +nightly
 LOCAL_BIN ?= mcp_google_calendar
 SHUTTLE_BIN ?= shuttle
 SHUTTLE ?= cargo shuttle
+SCCACHE ?= $(shell command -v sccache 2>/dev/null)
+JOBS ?= 4
 
-.PHONY: help run run-shuttle build build-release test fmt clippy clean shuttle-deploy shuttle-deploy-secrets shuttle-logs shuttle-status
+.PHONY: help run run-shuttle build build-release test fmt clippy clean shuttle-deploy shuttle-deploy-secrets shuttle-logs shuttle-status build-opt build-release-opt run-opt test-opt
 
 help:
 	@echo "Available targets:"
@@ -12,6 +14,10 @@ help:
 	@echo "  make run-shuttle          # Run the Shuttle binary ($(SHUTTLE_BIN)) locally"
 	@echo "  make build                # Debug build with nightly toolchain"
 	@echo "  make build-release        # Release build with nightly toolchain"
+	@echo "  make build-opt            # Debug build with sccache (if available) and limited jobs"
+	@echo "  make build-release-opt    # Release build with sccache (if available) and limited jobs"
+	@echo "  make run-opt              # Run local server with sccache (if available) and limited jobs"
+	@echo "  make test-opt             # Test with sccache (if available) and limited jobs"
 	@echo "  make test                 # Run tests with nightly toolchain"
 	@echo "  make fmt                  # Format code with rustfmt"
 	@echo "  make clippy               # Run clippy with warnings as errors"
@@ -33,8 +39,20 @@ build:
 build-release:
 	$(CARGO) $(NIGHTLY) build --release
 
+build-opt:
+	CARGO_BUILD_JOBS=$(JOBS) RUSTC_WRAPPER=$(SCCACHE) $(CARGO) $(NIGHTLY) build
+
+build-release-opt:
+	CARGO_BUILD_JOBS=$(JOBS) RUSTC_WRAPPER=$(SCCACHE) $(CARGO) $(NIGHTLY) build --release
+
 test:
 	$(CARGO) $(NIGHTLY) test
+
+test-opt:
+	CARGO_BUILD_JOBS=$(JOBS) RUSTC_WRAPPER=$(SCCACHE) $(CARGO) $(NIGHTLY) test
+
+run-opt:
+	CARGO_BUILD_JOBS=$(JOBS) RUSTC_WRAPPER=$(SCCACHE) $(CARGO) $(NIGHTLY) run --bin $(LOCAL_BIN)
 
 fmt:
 	$(CARGO) fmt

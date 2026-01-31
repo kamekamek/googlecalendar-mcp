@@ -100,7 +100,23 @@ docker build -t asia-northeast1-docker.pkg.dev/mcp-calendar-prod/mcp-calendar/se
 docker push asia-northeast1-docker.pkg.dev/mcp-calendar-prod/mcp-calendar/server:latest
 ```
 
-## 5. Cloud Run にデプロイ
+## 5. Cloud Run 用の環境変数
+
+Cloud Run ではローカル向けの `.env` ではなく、以下の環境変数を `gcloud run deploy` で設定します。
+
+- `APP__OAUTH__CLIENT_ID` / `APP__OAUTH__CLIENT_SECRET`
+- `APP__OAUTH__REDIRECT_URI`
+  - Proxy を有効化する場合は `https://<service-url>/proxy/oauth/callback`
+- `APP__SERVER__PUBLIC_URL`
+  - Cloud Run の公開 URL かカスタムドメインを指定
+- `APP__PROXY__ENABLED`（`true` 推奨）
+- `APP__SERVER__BIND_ADDRESS`（`0.0.0.0:8080`）
+- `APP__SECURITY__USE_IN_MEMORY`
+  - 本番では `false` 推奨（永続ストレージは後述）
+
+ローカル用途の値は `.env.example` を参照してください。
+
+## 6. Cloud Run にデプロイ
 
 ```bash
 gcloud run deploy mcp-calendar \
@@ -120,7 +136,7 @@ gcloud run deploy mcp-calendar \
 
 > **注意**: `<hash>` はデプロイ後に払い出される URL に含まれます。初回デプロイ後に URL を確認し、環境変数とリダイレクト URI を更新してください。
 
-## 6. カスタムドメインの設定（オプション）
+## 7. カスタムドメインの設定（オプション）
 
 ```bash
 # ドメインマッピングを作成
@@ -132,7 +148,7 @@ gcloud run domain-mappings create \
 
 手順に従って DNS レコード（A または CNAME）を設定すると、TLS 証明書が自動発行されます。
 
-## 7. Google Cloud Console の設定
+## 8. Google Cloud Console の設定
 
 OAuth クライアント ID のリダイレクト URI に以下を追加：
 
@@ -146,7 +162,7 @@ https://mcp-calendar-<hash>-an.a.run.app/proxy/oauth/callback
 https://mcp.example.com/proxy/oauth/callback
 ```
 
-## 8. トークンストレージの永続化（推奨）
+## 9. トークンストレージの永続化（推奨）
 
 Cloud Run はステートレスなので、`config/tokens.json` はコンテナ再起動時に失われます。以下の選択肢を検討してください：
 
@@ -194,7 +210,7 @@ gcloud firestore databases create --region=asia-northeast1
 firestore = "0.41"
 ```
 
-## 9. Claude Code で接続
+## 10. Claude Code で接続
 
 `.mcp.json` に以下を追加：
 

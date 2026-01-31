@@ -93,7 +93,10 @@ impl GoogleCalendarClient {
             request = request.query(&query);
         }
 
-        let response = request.send().await?.error_for_status()?;
+        let response = request.send().await?;
+        if !response.status().is_success() {
+            return Err(Self::classify_error(response).await.into());
+        }
         let payload = response.json::<ListEventsResponse>().await?;
         Ok(payload)
     }
@@ -110,8 +113,11 @@ impl GoogleCalendarClient {
             .get(url)
             .bearer_auth(&token.access_token)
             .send()
-            .await?
-            .error_for_status()?;
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(Self::classify_error(response).await.into());
+        }
 
         Ok(response.json::<CalendarEvent>().await?)
     }
@@ -144,8 +150,11 @@ impl GoogleCalendarClient {
             .bearer_auth(&token.access_token)
             .json(&body)
             .send()
-            .await?
-            .error_for_status()?;
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(Self::classify_error(response).await.into());
+        }
 
         Ok(response.json::<CalendarEvent>().await?)
     }
@@ -171,10 +180,96 @@ impl GoogleCalendarClient {
             .bearer_auth(&token.access_token)
             .json(&body)
             .send()
-            .await?
-            .error_for_status()?;
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(Self::classify_error(response).await.into());
+        }
 
         Ok(response.json::<CalendarEvent>().await?)
+    }
+
+    /// Google Calendar APIからのエラーレスポンスを分類
+    async fn classify_error(response: reqwest::Response) -> GoogleCalendarError {
+        let status_code = response.status().as_u16();
+
+        // Google API error JSONをパース
+        let error_body = match response.json::<GoogleApiError>().await {
+            Ok(api_error) => api_error.error,
+            Err(_) => {
+                // JSONパース失敗時はフォールバック
+                return GoogleCalendarError::Other {
+                    message: "Unknown Google API error".to_string(),
+                    status_code,
+                };
+            }
+        };
+
+        // ステータスコードとメッセージ内容でエラー分類
+        match status_code {
+            403 if error_body.message.to_lowercase().contains("insufficient")
+                || error_body.message.to_lowercase().contains("scope")
+                || error_body.status == "PERMISSION_DENIED" =>
+            {
+                GoogleCalendarError::InsufficientScope {
+                    message: error_body.message,
+                }
+            }
+            401 => GoogleCalendarError::Unauthorized {
+                message: error_body.message,
+            },
+            404 => GoogleCalendarError::NotFound {
+                message: error_body.message,
+            },
+            _ => GoogleCalendarError::Other {
+                message: error_body.message,
+                status_code,
+            },
+        }
+    }
+}
+
+/// Google API error response structure
+#[derive(Debug, Deserialize)]
+struct GoogleApiError {
+    error: GoogleApiErrorDetail,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleApiErrorDetail {
+    code: u16,
+    message: String,
+    status: String,
+}
+
+/// 分類されたGoogle Calendar APIエラー
+#[derive(Debug)]
+pub enum GoogleCalendarError {
+    InsufficientScope { message: String },
+    Unauthorized { message: String },
+    NotFound { message: String },
+    Other { message: String, status_code: u16 },
+}
+
+impl From<GoogleCalendarError> for anyhow::Error {
+    fn from(err: GoogleCalendarError) -> Self {
+        match err {
+            GoogleCalendarError::InsufficientScope { message } => {
+                anyhow!("insufficient_scope: {}", message)
+            }
+            GoogleCalendarError::Unauthorized { message } => {
+                anyhow!("unauthorized: {}", message)
+            }
+            GoogleCalendarError::NotFound { message } => {
+                anyhow!("not_found: {}", message)
+            }
+            GoogleCalendarError::Other {
+                message,
+                status_code,
+            } => {
+                anyhow!("google_api_error ({}): {}", status_code, message)
+            }
+        }
     }
 }
 

@@ -30,6 +30,8 @@ pub struct ProxyState {
     clients: RwLock<HashMap<String, RegisteredClient>>,
     auth_states: RwLock<HashMap<String, AuthorizationRequest>>, // state -> request
     codes: RwLock<HashMap<String, AuthorizationCodeGrant>>,     // code -> grant
+    // Client ID Metadata Documents cache: client_id -> (metadata, expires_at)
+    metadata_cache: RwLock<HashMap<String, (ClientMetadata, DateTime<Utc>)>>,
 }
 
 impl ProxyState {
@@ -74,6 +76,7 @@ impl ProxyState {
             clients: RwLock::new(HashMap::new()),
             auth_states: RwLock::new(HashMap::new()),
             codes: RwLock::new(HashMap::new()),
+            metadata_cache: RwLock::new(HashMap::new()),
         })
     }
 
@@ -95,11 +98,82 @@ impl ProxyState {
             clients: RwLock::new(HashMap::new()),
             auth_states: RwLock::new(HashMap::new()),
             codes: RwLock::new(HashMap::new()),
+            metadata_cache: RwLock::new(HashMap::new()),
         }
     }
 
     pub fn is_enabled(&self) -> bool {
         self.enabled
+    }
+
+    /// client_idがHTTPS URLかどうか判定（Client ID Metadata Documents用）
+    fn is_metadata_client_id(client_id: &str) -> bool {
+        client_id.starts_with("https://")
+    }
+
+    /// HTTPS URLからClient ID Metadata Documentを取得・検証
+    async fn fetch_client_metadata(&self, client_id: &str) -> Result<ClientMetadata> {
+        use anyhow::{bail, ensure, Context};
+
+        // URLパース
+        let url = reqwest::Url::parse(client_id)
+            .context("client_id must be valid HTTPS URL")?;
+
+        // HTTPSスキームを要求
+        if url.scheme() != "https" {
+            bail!("client_id URL must use HTTPS scheme");
+        }
+
+        // メタデータURLを構築: {client_id}/.well-known/oauth-client
+        let metadata_url = url.join(".well-known/oauth-client")
+            .context("failed to construct metadata URL")?;
+
+        tracing::debug!(
+            client_id = %client_id,
+            metadata_url = %metadata_url,
+            "fetching client metadata document"
+        );
+
+        // HTTPリクエスト（5秒タイムアウト）
+        let response = self.http_client
+            .get(metadata_url.as_str())
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+            .context("failed to fetch client metadata")?;
+
+        if !response.status().is_success() {
+            bail!(
+                "metadata fetch returned status {}: {}",
+                response.status(),
+                response.text().await.unwrap_or_default()
+            );
+        }
+
+        let metadata: ClientMetadata = response.json().await
+            .context("failed to parse metadata JSON")?;
+
+        // 検証: client_id一致
+        ensure!(
+            metadata.client_id == client_id,
+            "client_id mismatch: metadata.client_id={}, requested={}",
+            metadata.client_id,
+            client_id
+        );
+
+        // 検証: redirect_uris非空
+        ensure!(
+            !metadata.redirect_uris.is_empty(),
+            "metadata must include at least one redirect_uri"
+        );
+
+        tracing::info!(
+            client_id = %client_id,
+            redirect_uris = ?metadata.redirect_uris,
+            "successfully fetched and validated client metadata"
+        );
+
+        Ok(metadata)
     }
 
     pub fn metadata(&self) -> AuthorizationServerMetadata {
@@ -115,6 +189,7 @@ impl ProxyState {
             token_endpoint_auth_methods_supported: vec!["client_secret_post"],
             subject_types_supported: vec!["public"],
             id_token_signing_alg_values_supported: vec!["RS256"],
+            client_id_metadata_document_supported: Some(true),
         }
     }
 
@@ -180,26 +255,53 @@ impl ProxyState {
         })
     }
 
-    pub fn start_authorization(&self, params: &AuthorizationParams) -> Result<String> {
-        let client = self
-            .clients
-            .read()
-            .get(&params.client_id)
-            .cloned()
-            .ok_or_else(|| anyhow!("unknown client_id"))?;
+    pub async fn start_authorization(&self, params: &AuthorizationParams) -> Result<String> {
+        use anyhow::bail;
 
-        if !client.redirect_uris.contains(&params.redirect_uri) {
-            return Err(anyhow!("redirect_uri is not registered"));
-        }
-
+        // response_type検証
         if params.response_type != "code" {
-            return Err(anyhow!("unsupported response_type"));
+            bail!("unsupported response_type");
         }
 
+        // クライアント検証 - 登録済みクライアントまたはメタデータベースクライアント
+        let validated_client = if Self::is_metadata_client_id(&params.client_id) {
+            // Client ID Metadata Documents: HTTPS URLからメタデータを取得
+            tracing::info!(
+                client_id = %params.client_id,
+                "detecting URL-based client_id, fetching metadata document"
+            );
+            let metadata = self.fetch_client_metadata(&params.client_id).await?;
+            ValidatedClient::Metadata(metadata)
+        } else {
+            // 従来の登録済みクライアント
+            let client = self
+                .clients
+                .read()
+                .get(&params.client_id)
+                .cloned()
+                .ok_or_else(|| anyhow!("unknown client_id"))?;
+            ValidatedClient::Registered(client)
+        };
+
+        // redirect_uri検証（登録済みURIリストと照合）
+        let (allowed_uris, default_scope) = match &validated_client {
+            ValidatedClient::Registered(c) => (&c.redirect_uris, &c.scope),
+            ValidatedClient::Metadata(m) => {
+                let scope = m.scope.as_ref()
+                    .unwrap_or(&"https://www.googleapis.com/auth/calendar.events".to_string());
+                (&m.redirect_uris, scope)
+            }
+        };
+
+        if !allowed_uris.contains(&params.redirect_uri) {
+            bail!("redirect_uri '{}' is not registered for client_id '{}'",
+                  params.redirect_uri, params.client_id);
+        }
+
+        // 認可状態を保存
         let proxy_state = Uuid::new_v4().to_string();
         let original_state = params.state.clone();
-
-        let scope = params.scope.clone().unwrap_or_else(|| client.scope.clone());
+        let scope = params.scope.clone().unwrap_or_else(|| default_scope.clone());
 
         self.auth_states.write().insert(
             proxy_state.clone(),
@@ -213,6 +315,7 @@ impl ProxyState {
             },
         );
 
+        // Google OAuth URLを構築
         let mut google_url = reqwest::Url::parse(&self.google_auth_url)?;
         google_url
             .query_pairs_mut()
@@ -281,17 +384,73 @@ impl ProxyState {
     }
 
     pub async fn exchange_code(&self, form: &TokenRequest) -> Result<TokenResponse> {
-        let client = self
-            .clients
-            .read()
-            .get(&form.client_id)
-            .cloned()
-            .ok_or_else(|| anyhow!("unknown client_id"))?;
+        use anyhow::bail;
 
-        if client.client_secret != form.client_secret {
-            return Err(anyhow!("invalid client_secret"));
+        // クライアント検証 - 登録済みクライアントまたはメタデータベースクライアント
+        if Self::is_metadata_client_id(&form.client_id) {
+            // Client ID Metadata Documents: キャッシュから取得または再フェッチ
+            let metadata = {
+                let cache = self.metadata_cache.read();
+                if let Some((cached, expires_at)) = cache.get(&form.client_id) {
+                    if *expires_at > Utc::now() {
+                        Some(cached.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+
+            let metadata = if let Some(m) = metadata {
+                tracing::debug!(
+                    client_id = %form.client_id,
+                    "using cached client metadata"
+                );
+                m
+            } else {
+                tracing::info!(
+                    client_id = %form.client_id,
+                    "cache miss or expired, fetching client metadata"
+                );
+                let fetched = self.fetch_client_metadata(&form.client_id).await?;
+                let expires_at = Utc::now() + chrono::Duration::hours(24);
+                self.metadata_cache.write()
+                    .insert(form.client_id.clone(), (fetched.clone(), expires_at));
+                fetched
+            };
+
+            // メタデータクライアントはclient_secret不要（token_endpoint_auth_method="none"）
+            if metadata.token_endpoint_auth_method.as_deref() != Some("none") {
+                bail!(
+                    "client metadata must specify token_endpoint_auth_method=\"none\", got: {:?}",
+                    metadata.token_endpoint_auth_method
+                );
+            }
+
+            // redirect_uri検証
+            if !metadata.redirect_uris.contains(&form.redirect_uri) {
+                bail!("redirect_uri mismatch");
+            }
+        } else {
+            // 従来の登録済みクライアント - client_secret検証必須
+            let client = self
+                .clients
+                .read()
+                .get(&form.client_id)
+                .cloned()
+                .ok_or_else(|| anyhow!("unknown client_id"))?;
+
+            if client.client_secret != form.client_secret {
+                bail!("invalid client_secret");
+            }
+
+            if !client.redirect_uris.contains(&form.redirect_uri) {
+                bail!("redirect_uri mismatch");
+            }
         }
 
+        // Authorization code検証
         let grant = self
             .codes
             .write()
@@ -299,13 +458,10 @@ impl ProxyState {
             .ok_or_else(|| anyhow!("invalid or expired code"))?;
 
         if grant.created_at + chrono::Duration::seconds(CODE_EXPIRATION_SECS) < Utc::now() {
-            return Err(anyhow!("authorization code expired"));
+            bail!("authorization code expired");
         }
 
-        if !client.redirect_uris.contains(&form.redirect_uri) {
-            return Err(anyhow!("redirect_uri mismatch"));
-        }
-
+        // Googleトークンエンドポイントへのリクエスト構築
         let mut request = vec![
             ("grant_type", "authorization_code"),
             ("code", grant.google_code.as_str()),
@@ -442,6 +598,8 @@ pub struct AuthorizationServerMetadata {
     pub token_endpoint_auth_methods_supported: Vec<&'static str>,
     pub subject_types_supported: Vec<&'static str>,
     pub id_token_signing_alg_values_supported: Vec<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_id_metadata_document_supported: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -464,6 +622,32 @@ pub struct OpenIdConfiguration {
     pub token_endpoint_auth_methods_supported: Vec<&'static str>,
     pub subject_types_supported: Vec<&'static str>,
     pub id_token_signing_alg_values_supported: Vec<&'static str>,
+}
+
+/// OAuth Client ID Metadata Document (draft-ietf-oauth-client-id-metadata-document-00)
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ClientMetadata {
+    pub client_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_name: Option<String>,
+    pub redirect_uris: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grant_types: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_endpoint_auth_method: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logo_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_uri: Option<String>,
+}
+
+/// クライアント検証結果 - 登録済みクライアントまたはメタデータベースクライアント
+#[derive(Debug, Clone)]
+enum ValidatedClient {
+    Registered(RegisteredClient),
+    Metadata(ClientMetadata),
 }
 
 #[derive(Debug, Serialize)]
